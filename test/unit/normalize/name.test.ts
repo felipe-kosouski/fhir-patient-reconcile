@@ -147,6 +147,57 @@ const cases: Case[] = [
     expected: parts('ana', [], ['souza']),
     why: 'structured parts win over text when both are present',
   },
+  // --- placeholders ---
+  {
+    name: { given: ['RN de Maria'], family: 'Souza' },
+    expected: undefined,
+    why: 'newborn registered as "RN de <mother>": the name describes the mother, not the baby',
+  },
+  {
+    name: { text: 'Bebê de Ana Souza' },
+    expected: undefined,
+    why: '"Bebê de <mother>" is the same newborn convention',
+  },
+  {
+    name: { given: ['Recém-Nascido'], family: 'Souza' },
+    expected: undefined,
+    why: '"recém-nascido" (newborn) as the given name is a placeholder',
+  },
+  {
+    name: { given: ['Baby Girl'], family: 'Smith' },
+    expected: undefined,
+    why: 'US newborn convention "Baby Girl/Boy <family>"',
+  },
+  {
+    name: { given: ['Bebe'], family: 'Souza' },
+    expected: parts('bebe', [], ['souza']),
+    why: 'Bebe without "de" can be a real first name, so it is kept',
+  },
+  {
+    name: { given: ['John'], family: 'Doe' },
+    expected: undefined,
+    why: 'US convention for an unidentified patient',
+  },
+  {
+    name: { text: 'Fulano de Tal' },
+    expected: undefined,
+    why: 'Brazilian convention for an unnamed person',
+  },
+  {
+    name: { given: ['UNKNOWN'], family: 'Souza' },
+    expected: parts(undefined, [], ['souza']),
+    why: 'a placeholder given name is missing, not a name; the family name is still usable',
+  },
+  {
+    name: { given: ['Ana'], family: 'Não Informado' },
+    expected: parts('ana', [], []),
+    why: 'a placeholder family name ("not informed") is missing',
+  },
+  {
+    name: { given: ['Ana', 'Desconhecida'], family: 'Souza' },
+    expected: parts('ana', ['desconhecida'], ['souza']),
+    why: 'only a whole name part is checked, so the rule cannot eat parts of real names',
+  },
   // --- nothing usable ---
   {
     name: {},

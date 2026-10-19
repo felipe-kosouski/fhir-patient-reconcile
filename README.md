@@ -7,7 +7,7 @@
 ![license](https://img.shields.io/badge/license-Apache--2.0-blue)
 
 > [!NOTE]
-> **Work in progress.** The foundations (types, build, CI, name and text normalization) are done.
+> **Work in progress.** The foundations (types, build, CI, name, phone and email normalization) are done.
 > Matching and merging are being built next, and the package is not on npm yet.
 > See [Status](#status) for exactly what works today.
 
@@ -56,7 +56,8 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | Package scaffold: TypeScript 7 strict, dual ESM/CJS build, CI on Node 22/24/26 | ✅ done |
 | FHIR input types with compatibility tests against `@types/fhir` and Medplum | ✅ done |
 | `normalizeText`, `normalizeName` | ✅ done |
-| Phone, email, birth date, address, CPF normalizers; placeholder values | 🚧 next |
+| `normalizePhone` (Brazil + NANP, ninth digit), `normalizeEmail`, placeholder values | ✅ done |
+| Birth date, address and CPF normalizers | 🚧 next |
 | Jaro-Winkler and Damerau-Levenshtein | ⏳ planned |
 | `matchPatients` (weights, thresholds, vetoes, FHIR `match-grade`) | ⏳ planned |
 | `mergePatient` (fail-closed, change report) | ⏳ planned |
@@ -65,7 +66,7 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 ## What works today
 
 ```ts
-import { normalizeName, normalizeText } from 'fhir-patient-reconcile';
+import { normalizeName, normalizePhone, normalizeText } from 'fhir-patient-reconcile';
 
 normalizeName({ family: 'da Silva Souza Filho', given: ['João Pedro'] });
 // {
@@ -81,6 +82,15 @@ normalizeName({ text: 'Dra. Maria de Lourdes Souza' });
 
 normalizeText('  D’Ávila-SOUZA ');
 // 'davila souza'
+
+normalizePhone('(41) 9876-5432', { defaultCountry: 'BR' });
+// { e164: '+5541998765432', line: 'mobile', ninthDigitAdded: true }  (old 8-digit mobile)
+
+normalizePhone('(415) 555-0123');
+// undefined: also a valid Brazilian landline, and no defaultCountry was given
+
+normalizeName({ given: ['RN de Maria'], family: 'Souza' });
+// undefined: a newborn placeholder describes the mother, so it counts as missing
 ```
 
 ## Planned API (v0.1)
@@ -116,7 +126,8 @@ How correctness is checked, not just asserted:
   `exactOptionalPropertyTypes: true` and `false`. Each design rule was broken on purpose
   (index signature, missing `| undefined`, code unions, mutable arrays) to confirm the suite
   catches it. See [ADR-0001](docs/adr/0001-own-fhir-types.md).
-- **Property-based tests** with fast-check: normalizers are idempotent and never mutate input.
+- **Property-based tests** with fast-check: normalizers are idempotent, ignore formatting
+  (separators, parentheses, country codes) and never mutate input.
   These already caught a real bug (a doubled generational suffix normalized differently on a
   second pass).
 - **Hard cases written before tuning.** The matching weights will be calibrated against a table

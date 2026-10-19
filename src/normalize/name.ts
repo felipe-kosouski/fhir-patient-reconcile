@@ -1,4 +1,5 @@
 import type { HumanNameLike } from '../types/fhir.js';
+import { isPlaceholderFullName, isPlaceholderNamePart, PARTICLES } from './placeholders.js';
 import { tokenize } from './text.js';
 
 /** Canonical generational suffixes. Jr./Júnior map to `junior`, Sr. to `senior`. */
@@ -28,9 +29,6 @@ export interface NormalizedName {
    */
   source: 'parts' | 'text';
 }
-
-/** Portuguese particles, dropped only when they sit between two names. */
-const PARTICLES: ReadonlySet<string> = new Set(['da', 'de', 'do', 'das', 'dos', 'e']);
 
 const GENERATIONAL: ReadonlyMap<string, GenerationalSuffix> = new Map([
   ['jr', 'junior'],
@@ -69,6 +67,8 @@ const TITLES: ReadonlySet<string> = new Set([
  * - Structured `given`/`family` win; `text` is only parsed when both are empty.
  * - A generational suffix is read from `suffix`, or from trailing family tokens while at least
  *   one family name remains. Given names are never read as suffixes ("Júnior" is a first name).
+ * - Placeholders count as missing: a whole name part such as "UNKNOWN" or "Não Informado", and
+ *   whole names such as "RN de Maria", "Baby Girl Smith", "John Doe", "Fulano de Tal".
  * - Particles (da, de, do, das, dos, e) are dropped only between two names.
  * - `prefix` is ignored.
  *
@@ -78,50 +78,53 @@ export function normalizeName(name: HumanNameLike): NormalizedName | undefined {
   const given = (name.given ?? []).flatMap(tokenize);
   const family = tokenize(name.family ?? '');
   if (given.length > 0 || family.length > 0) {
-    return fromParts(given, family, suffixFromField(name.suffix ?? []));
+    const stripped = stripTrailingSuffixes(family, 1);
+    return build(
+      given,
+      stripped.rest,
+      suffixFromField(name.suffix ?? []) ?? stripped.suffix,
+      'parts',
+    );
   }
   return fromText(tokenize(name.text ?? ''));
 }
 
-function fromParts(
-  given: string[],
-  family: string[],
-  fieldSuffix: GenerationalSuffix | undefined,
-): NormalizedName {
-  const { rest: familyNames, suffix: trailing } = stripTrailingSuffixes(family, 1);
-
-  const sequence = [...given, ...familyNames];
-  const keep = innerParticleMask(sequence).map((dropped) => !dropped);
-  const keptGiven = given.filter((_, i) => keep[i]);
-  const keptFamily = familyNames.filter((_, i) => keep[given.length + i]);
-
-  return {
-    given: keptGiven[0],
-    middle: keptGiven.slice(1),
-    family: keptFamily,
-    suffix: fieldSuffix ?? trailing,
-    source: 'parts',
-  };
-}
-
-function fromText(tokens: string[]): NormalizedName | undefined {
-  let words: readonly string[] = tokens;
+/** Text has no structure: first token = given, last token = family, the rest = middle. */
+function fromText(tokens: readonly string[]): NormalizedName | undefined {
+  let words = tokens;
   if (words.length > 1 && TITLES.has(words[0] ?? '')) words = words.slice(1);
 
   // Only a suffix when a first name and a family name both remain ("José Neto" keeps Neto).
   const stripped = stripTrailingSuffixes(words, 2);
-  const trailing = stripped.suffix;
   words = stripped.rest;
+  if (words.length <= 1) return build(words, [], stripped.suffix, 'text');
+  return build(words.slice(0, -1), words.slice(-1), stripped.suffix, 'text');
+}
 
-  words = dropInnerParticles(words);
-  if (words.length === 0) return undefined;
+/**
+ * Shared by both sources, after suffixes are removed. The order matters for idempotence:
+ * placeholder parts, then placeholder full names, then particles.
+ */
+function build(
+  given: readonly string[],
+  family: readonly string[],
+  suffix: GenerationalSuffix | undefined,
+  source: NormalizedName['source'],
+): NormalizedName | undefined {
+  const g = isPlaceholderNamePart(given) ? [] : given;
+  const f = isPlaceholderNamePart(family) ? [] : family;
+  const sequence = [...g, ...f];
+  if (sequence.length === 0 || isPlaceholderFullName(sequence)) return undefined;
 
+  const dropped = innerParticleMask(sequence);
+  const keptGiven = g.filter((_, i) => !dropped[i]);
+  const keptFamily = f.filter((_, i) => !dropped[g.length + i]);
   return {
-    given: words[0],
-    middle: words.slice(1, -1),
-    family: words.length > 1 ? words.slice(-1) : [],
-    suffix: trailing,
-    source: 'text',
+    given: keptGiven[0],
+    middle: keptGiven.slice(1),
+    family: keptFamily,
+    suffix,
+    source,
   };
 }
 
@@ -145,12 +148,6 @@ function suffixFromField(suffixes: readonly string[]): GenerationalSuffix | unde
     if (suffix !== undefined) return suffix;
   }
   return undefined;
-}
-
-/** Drops particles that have a non-particle token somewhere before and after them. */
-function dropInnerParticles(tokens: readonly string[]): string[] {
-  const dropped = innerParticleMask(tokens);
-  return tokens.filter((_, i) => !dropped[i]);
 }
 
 /** `true` at each particle that has a non-particle token somewhere before and after it. */
