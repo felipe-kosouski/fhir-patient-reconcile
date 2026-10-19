@@ -1,0 +1,68 @@
+{
+  "name": "fhir-patient-reconcile",
+  "version": "0.0.0",
+  "description": "Explainable matching and fail-closed merging of FHIR R4 Patient resources.",
+  "keywords": [
+    "fhir",
+    "patient",
+    "patient-matching",
+    "record-linkage",
+    "deduplication",
+    "merge",
+    "healthcare"
+  ],
+  "license": "Apache-2.0",
+  "author": "Felipe Kosouski",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/felipe-kosouski/fhir-patient-reconcile.git"
+  },
+  "bugs": "https://github.com/felipe-kosouski/fhir-patient-reconcile/issues",
+  "homepage": "https://github.com/felipe-kosouski/fhir-patient-reconcile#readme",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@12.14.0",
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:package": "node test/package/smoke.mjs && node test/package/smoke.cjs",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "check:package": "publint --strict && attw --pack .",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:package && pnpm check:package"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "22.20.5",
+    "@vitest/coverage-v8": "5.0.5",
+    "publint": "0.3.25",
+    "tsdown": "0.23.1",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}
