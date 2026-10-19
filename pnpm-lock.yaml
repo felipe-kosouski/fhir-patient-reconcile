@@ -178,9 +178,6 @@ importers:
       '@types/fhir':
         specifier: 0.0.44
         version: 0.0.44
-      '@types/node':
-        specifier: 22.20.5
-        version: 22.20.5
       '@vitest/coverage-v8':
         specifier: 5.0.5
         version: 5.0.5(vitest@5.0.5)
@@ -1431,6 +1428,7 @@ snapshots:
   '@types/node@22.20.5':
     dependencies:
       undici-types: 6.21.0
+    optional: true
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true
@@ -1956,7 +1954,8 @@ snapshots:
       '@quansync/fs': 1.1.0
       quansync: 1.0.0
 
-  undici-types@6.21.0: {}
+  undici-types@6.21.0:
+    optional: true
 
   unicode-emoji-modifier-base@1.0.0: {}
 

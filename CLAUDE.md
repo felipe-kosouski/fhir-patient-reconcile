@@ -31,9 +31,10 @@ These planning files are local-only (git-ignored, not in the public repo).
 
 ## Normalization decisions (sessions 3–4)
 - Normalizers return `undefined` for anything unusable; **placeholders count as missing**, never as agreement.
-- Names: particles (da, de, do, das, dos, e) dropped only between two names; generational suffixes read from `HumanName.suffix` or trailing family tokens, never from given names; `text` parsed only without structured parts (first token = given, last = family, `source: 'text'`); placeholders are whole name parts (UNKNOWN, Não Informado) or whole names (RN de…, Bebê de…, Baby Girl…, John Doe, Fulano de Tal). Bebe or Doe alone are real names.
-- Phones: output is `{ e164, line, ninthDigitAdded }` with no country label (+1 is also Canada). An explicit country code beats `defaultCountry`; a number valid in both countries without a default is rejected as ambiguous. Other countries go through the pluggable hook (to be added with `MatchOptions`).
-- Emails: no provider-specific rules (Gmail dots and plus tags are kept).
+- Names: particles (da, de, do, das, dos, e) dropped only between two names; generational suffixes read from `HumanName.suffix` or trailing family tokens, never from given names; leading titles (Dr., Sra., Mr.) dropped from given names and `text` while another token remains; `text` parsed only without structured parts (first token = given, last = family, `source: 'text'`); placeholders are whole name parts (UNKNOWN, Não Informado) or whole names (RN de…, Bebê de…, Baby Girl…, John Doe, Fulano de Tal). Bebe or Doe alone are real names.
+- Phones: output is `{ e164, line, ninthDigitAdded }` with no country label (+1 is also Canada). An explicit country code (`+` anywhere before the first digit, `00`, `011`) beats `defaultCountry`; service numbers are rejected (BR 0800/0300, NANP toll-free 8XX and 900); labels such as "Cel:" make the value invalid; a number valid in both countries without a default is rejected as ambiguous. Other countries go through the pluggable hook (to be added with `MatchOptions`).
+- Emails: no provider-specific rules (Gmail dots and plus tags are kept). Valid = unquoted RFC 5322 dot-atom local part (Unicode letters allowed) + at least two RFC 1123 host labels, last one containing a letter.
+- Property tests must be able to fail: assert that generated *valid* inputs produce a result, and confirm new properties by breaking the code on purpose.
 
 ## Non-negotiable invariants
 - **Type compatibility** with `@types/fhir` (R4 and R5) and `@medplum/fhirtypes` is a hard requirement, enforced by type tests in CI under both `exactOptionalPropertyTypes: true` and `false`:

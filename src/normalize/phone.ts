@@ -32,8 +32,9 @@ const BR_AREA_CODES: ReadonlySet<string> = new Set(
  * An explicit country code (`+55`, `+1`, `00…`, `011…`) wins over `defaultCountry`. Without
  * either, the number is parsed for both countries and kept only if exactly one accepts it.
  *
- * Returns `undefined` for invalid numbers, numbers from other countries, service numbers,
- * letters, numbers without an area code, and placeholders (one repeated digit).
+ * Returns `undefined` for invalid numbers, numbers from other countries, service numbers
+ * (Brazilian 0800/0300, NANP toll-free 8XX and 900), letters (including labels such as "Cel:"),
+ * numbers without an area code, and placeholders (one repeated digit).
  */
 export function normalizePhone(
   value: string,
@@ -43,13 +44,15 @@ export function normalizePhone(
     .normalize('NFKC')
     .trim()
     .replace(/^tel:/i, '')
-    .replace(/\s*(?:ext\.?|extension|ramal|x|r\.)\s*\d+\s*$/i, '');
+    // Extensions: "x204", "ramal 22", RFC 3966 ";ext=204".
+    .replace(/\s*;?\s*(?:ext\.?|extension|ramal|x|r\.)\s*[=:.]?\s*\d+\s*$/i, '');
   if (/\p{L}/u.test(cleaned)) return undefined;
 
   const digits = cleaned.replace(/\D/g, '');
   if (digits === '') return undefined;
 
-  const international = cleaned.startsWith('+')
+  // "+" anywhere before the first digit, so "(+55) 41 ..." counts as an explicit country code.
+  const international = /^\D*\+/.test(cleaned)
     ? digits
     : digits.startsWith('00')
       ? digits.slice(2)
@@ -116,6 +119,7 @@ function parseNANP(n: string): NormalizedPhone | undefined {
   const npa = n.slice(0, 3);
   const nxx = n.slice(3, 6);
   if (!/^[2-9][0-8]\d$/.test(npa) || npa.endsWith('11')) return undefined;
+  if (/^8(\d)\1$/.test(npa) || npa === '900') return undefined; // toll-free 8XX, premium 900
   if (!/^[2-9]\d\d$/.test(nxx) || nxx.endsWith('11')) return undefined;
   if (isPlaceholderSubscriber(n.slice(3))) return undefined;
   return { e164: `+1${n}`, line: 'unknown', ninthDigitAdded: false };

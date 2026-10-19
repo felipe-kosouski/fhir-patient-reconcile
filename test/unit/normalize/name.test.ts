@@ -121,6 +121,16 @@ const cases: Case[] = [
     expected: parts('ana', [], ['souza']),
     why: 'HumanName.prefix (titles) does not take part in matching',
   },
+  {
+    name: { family: 'Souza', given: ['Dr. João'] },
+    expected: parts('joao', [], ['souza']),
+    why: 'a title typed into the given name is dropped, as in text',
+  },
+  {
+    name: { family: 'Souza', given: ['Dr'] },
+    expected: parts('dr', [], ['souza']),
+    why: 'a lone given token is kept even if it looks like a title: nothing else is left',
+  },
   // --- HumanName.text fallback ---
   {
     name: { text: 'Maria da Silva Souza' },
@@ -131,6 +141,11 @@ const cases: Case[] = [
     name: { text: 'Dr. João Souza Filho' },
     expected: text('joao', [], ['souza'], 'filho'),
     why: 'text only: leading title dropped, trailing generational suffix extracted',
+  },
+  {
+    name: { text: 'Dr. Dra. Ana Souza' },
+    expected: text('ana', [], ['souza']),
+    why: 'every leading title is dropped, not just the first',
   },
   {
     name: { text: 'José Neto' },

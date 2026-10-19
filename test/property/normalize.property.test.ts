@@ -51,17 +51,29 @@ const nameWord = fc.oneof(
   fc.string({ unit: 'grapheme', maxLength: 8 }),
   fc.string({ unit: 'binary', maxLength: 8 }),
 );
-const nameString = fc.array(nameWord, { maxLength: 4 }).map((words) => words.join(' '));
-
-const humanName: fc.Arbitrary<HumanNameLike> = fc.record(
+// Weighted so most words hit a rule; the arbitrary strings keep the rules honest.
+const weightedWord = fc.oneof(
+  { arbitrary: nameWord, weight: 1 },
   {
-    text: nameString,
-    family: nameString,
-    given: fc.array(nameString, { maxLength: 3 }),
-    prefix: fc.array(nameString, { maxLength: 2 }),
-    suffix: fc.array(nameString, { maxLength: 2 }),
+    arbitrary: fc.constantFrom('Dr.', 'Sra', 'RN', 'de', 'Filho', 'UNKNOWN', 'Ana', 'Souza'),
+    weight: 2,
   },
-  { requiredKeys: [] },
+);
+const nameString = fc.array(weightedWord, { maxLength: 4 }).map((words) => words.join(' '));
+
+const humanName: fc.Arbitrary<HumanNameLike> = fc.oneof(
+  fc.record(
+    {
+      text: nameString,
+      family: nameString,
+      given: fc.array(nameString, { maxLength: 3 }),
+      prefix: fc.array(nameString, { maxLength: 2 }),
+      suffix: fc.array(nameString, { maxLength: 2 }),
+    },
+    { requiredKeys: [] },
+  ),
+  // Text-only names exercise the text parser, which structured names bypass.
+  fc.record({ text: nameString }),
 );
 
 /** Rebuilds a structured HumanName from a normalized one. */
@@ -138,20 +150,25 @@ const digitString = (min: number, max: number) =>
     .array(fc.constantFrom(...'0123456789'), { minLength: min, maxLength: max })
     .map((d) => d.join(''));
 const BR_DDD = ['11', '21', '41', '55', '61', '71', '85', '91', '99'];
-/** National significant numbers that are well-formed by construction (placeholders possible). */
-const brNational = fc.oneof(
-  fc.tuple(fc.constantFrom(...BR_DDD), digitString(8, 8)).map(([ddd, rest]) => `${ddd}9${rest}`),
-  fc
-    .tuple(fc.constantFrom(...BR_DDD), fc.constantFrom('2', '3', '4', '5'), digitString(7, 7))
-    .map(([ddd, first, rest]) => `${ddd}${first}${rest}`),
-);
+const repeated = (digits: string) => /^(\d)\1*$/.test(digits);
+/** Valid Brazilian national numbers by construction (Anatel plan), placeholders excluded. */
+const brNational = fc
+  .oneof(
+    fc.tuple(fc.constantFrom(...BR_DDD), digitString(8, 8)).map(([ddd, rest]) => `${ddd}9${rest}`),
+    fc
+      .tuple(fc.constantFrom(...BR_DDD), fc.constantFrom('2', '3', '4', '5'), digitString(7, 7))
+      .map(([ddd, first, rest]) => `${ddd}${first}${rest}`),
+  )
+  .filter((n) => !repeated(n.slice(-8)));
+/** Valid NANP numbers by construction: geographic NPA, NXX not N11, placeholders excluded. */
 const usNational = fc
   .tuple(
     fc.constantFrom('212', '312', '415', '617', '702'),
     fc.constantFrom('2', '3', '5', '8'),
     digitString(6, 6),
   )
-  .map(([npa, first, rest]) => `${npa}${first}${rest}`);
+  .map(([npa, first, rest]) => `${npa}${first}${rest}`)
+  .filter((n) => !n.slice(3, 6).endsWith('11') && !repeated(n.slice(3)));
 const separator = fc.constantFrom('', ' ', '-', '.', '  ');
 
 /** Formats a digit string with random separators and optional parentheses around the area code. */
@@ -193,6 +210,7 @@ describe('normalizePhone properties', () => {
         ),
         ([national, pretty, prefix]) => {
           const plain = normalizePhone(national, { defaultCountry: 'BR' });
+          expect(plain).toBeDefined();
           expect(normalizePhone(`${prefix}${pretty}`, { defaultCountry: 'BR' })).toEqual(plain);
         },
       ),
@@ -204,6 +222,7 @@ describe('normalizePhone properties', () => {
         ),
         ([national, pretty, prefix]) => {
           const plain = normalizePhone(national, { defaultCountry: 'US' });
+          expect(plain).toBeDefined();
           expect(normalizePhone(`${prefix}${pretty}`, { defaultCountry: 'US' })).toEqual(plain);
         },
       ),
@@ -238,6 +257,7 @@ describe('normalizeEmail properties', () => {
     fc.assert(
       fc.property(fc.emailAddress(), (email) => {
         const plain = normalizeEmail(email);
+        expect(plain).toBe(email.toLowerCase());
         expect(normalizeEmail(`  ${email.toUpperCase()} `)).toBe(plain);
       }),
     );

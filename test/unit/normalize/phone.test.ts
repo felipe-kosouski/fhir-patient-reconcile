@@ -148,6 +148,23 @@ const cases: Case[] = [
   },
   { input: 'tel:+1-415-555-0123', expected: usFiction, why: 'tel: URI scheme (RFC 3966) removed' },
   {
+    input: 'tel:+1-415-555-0123;ext=204',
+    expected: usFiction,
+    why: 'RFC 3966 extension parameter ignored',
+  },
+  {
+    input: '(800) 555-0123',
+    defaultCountry: 'US',
+    expected: undefined,
+    why: 'toll-free (8XX) numbers are not personal phones, as with Brazilian 0800',
+  },
+  {
+    input: '(900) 555-0123',
+    defaultCountry: 'US',
+    expected: undefined,
+    why: '900 numbers are premium-rate services',
+  },
+  {
     input: '(115) 555-0123',
     defaultCountry: 'US',
     expected: undefined,
@@ -184,6 +201,12 @@ const cases: Case[] = [
     why: 'letters (vanity numbers) are not supported',
   },
   // --- choosing the country ---
+  {
+    input: '(+55) 41 99876-5432',
+    defaultCountry: 'US',
+    expected: mobileBR,
+    why: 'a "+" after an opening parenthesis is still an explicit country code',
+  },
   {
     input: '+55 41 99876-5432',
     defaultCountry: 'US',

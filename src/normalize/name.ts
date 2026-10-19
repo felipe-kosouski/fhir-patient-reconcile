@@ -45,7 +45,10 @@ const GENERATIONAL: ReadonlyMap<string, GenerationalSuffix> = new Map([
   ['iv', 'iv'],
 ]);
 
-/** Titles dropped from the start of `HumanName.text`. Structured `prefix` is ignored anyway. */
+/**
+ * Titles dropped from the start of the given names or of `HumanName.text` (dirty data often puts
+ * them there). Structured `prefix` is ignored anyway.
+ */
 const TITLES: ReadonlySet<string> = new Set([
   'dr',
   'dra',
@@ -70,7 +73,8 @@ const TITLES: ReadonlySet<string> = new Set([
  * - Placeholders count as missing: a whole name part such as "UNKNOWN" or "Não Informado", and
  *   whole names such as "RN de Maria", "Baby Girl Smith", "John Doe", "Fulano de Tal".
  * - Particles (da, de, do, das, dos, e) are dropped only between two names.
- * - `prefix` is ignored.
+ * - Leading titles (Dr., Sra., Mr. ...) are dropped from the given names and from `text`;
+ *   `prefix` is ignored.
  *
  * Returns `undefined` when nothing usable remains.
  */
@@ -80,7 +84,7 @@ export function normalizeName(name: HumanNameLike): NormalizedName | undefined {
   if (given.length > 0 || family.length > 0) {
     const stripped = stripTrailingSuffixes(family, 1);
     return build(
-      given,
+      stripLeadingTitles(given),
       stripped.rest,
       suffixFromField(name.suffix ?? []) ?? stripped.suffix,
       'parts',
@@ -91,8 +95,7 @@ export function normalizeName(name: HumanNameLike): NormalizedName | undefined {
 
 /** Text has no structure: first token = given, last token = family, the rest = middle. */
 function fromText(tokens: readonly string[]): NormalizedName | undefined {
-  let words = tokens;
-  if (words.length > 1 && TITLES.has(words[0] ?? '')) words = words.slice(1);
+  let words = stripLeadingTitles(tokens);
 
   // Only a suffix when a first name and a family name both remain ("José Neto" keeps Neto).
   const stripped = stripTrailingSuffixes(words, 2);
@@ -126,6 +129,13 @@ function build(
     suffix,
     source,
   };
+}
+
+/** Drops leading titles while more than one token remains ("Dr" alone is kept). */
+function stripLeadingTitles(tokens: readonly string[]): readonly string[] {
+  let start = 0;
+  while (tokens.length - start > 1 && TITLES.has(tokens[start] ?? '')) start++;
+  return tokens.slice(start);
 }
 
 /**
