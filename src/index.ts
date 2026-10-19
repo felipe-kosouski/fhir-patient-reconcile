@@ -1,5 +1,17 @@
 // Public API entry point. Only re-exports belong here.
-// Session 1 placeholder: replaced by the real API from session 2 onwards.
 
-/** The package name, exported so the build and package checks have a real symbol to verify. */
+export type {
+  AddressLike,
+  AdministrativeGender,
+  CodeableConceptLike,
+  CodingLike,
+  ContactPointLike,
+  HumanNameLike,
+  IdentifierLike,
+  PatientLike,
+} from './types/fhir.js';
+
+// Placeholder runtime export so the build and ESM/CJS smoke tests have a value to load.
+// Removed in session 3, when the first normalizer is exported.
+/** The package name. */
 export const PACKAGE_NAME = 'fhir-patient-reconcile' as const;

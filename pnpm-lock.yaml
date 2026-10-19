@@ -172,6 +172,12 @@ importers:
       '@biomejs/biome':
         specifier: 2.5.15
         version: 2.5.15
+      '@medplum/fhirtypes':
+        specifier: 5.2.6
+        version: 5.2.6
+      '@types/fhir':
+        specifier: 0.0.44
+        version: 0.0.44
       '@types/node':
         specifier: 22.20.5
         version: 22.20.5
@@ -303,6 +309,10 @@ packages:
   '@loaderkit/resolve@1.0.6':
     resolution: {integrity: sha512-G8FdIoF5CypfwmD9rl8BXod5HDn8JqB0CCNBXDTaRZ+yRYhARrrSToX1zg1zy9jX3zLqigsELwhT4gNtkdQAUg==}
 
+  '@medplum/fhirtypes@5.2.6':
+    resolution: {integrity: sha512-h0gX/GKW9epF4irqm89h9blTUyLx+cg7ruETIsCCBWWw9GspbhaXB17E5YxSumKjPVHzpMTUsbeV7sd5Fw+W0w==}
+    engines: {node: ^22.18.0 || >=24.2.0}
+
   '@oxc-project/types@0.154.0':
     resolution: {integrity: sha512-KYOUGQFlLWR+s4QMV2Q9ko38TZm7EdO87Qm7rvZLqk/webse/cDjtyxKhg/47l0byCbs/k46LT8qc4PKjAikzA==}
 
@@ -424,6 +434,9 @@ packages:
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/fhir@0.0.44':
+    resolution: {integrity: sha512-RhqRUNcUFeQSbEK9cOEYQ98sfsUFFRCUKbgozHvryiUfEAPiXuhgk2wqYV3MoD1T1qHp0gztrHDywU68bN7KYQ==}
 
   '@types/node@22.20.5':
     resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
@@ -1333,6 +1346,8 @@ snapshots:
     dependencies:
       '@braidai/lang': 1.1.2
 
+  '@medplum/fhirtypes@5.2.6': {}
+
   '@oxc-project/types@0.154.0': {}
 
   '@publint/pack@0.1.7':
@@ -1400,6 +1415,8 @@ snapshots:
   '@types/deep-eql@4.0.2': {}
 
   '@types/estree@1.0.9': {}
+
+  '@types/fhir@0.0.44': {}
 
   '@types/node@22.20.5':
     dependencies:

@@ -46,7 +46,7 @@
   "packageManager": "pnpm@12.14.0",
   "scripts": {
     "build": "tsdown",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.loose.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:package": "node test/package/smoke.mjs && node test/package/smoke.cjs",
@@ -58,6 +58,8 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
     "@biomejs/biome": "2.5.15",
+    "@medplum/fhirtypes": "5.2.6",
+    "@types/fhir": "0.0.44",
     "@types/node": "22.20.5",
     "@vitest/coverage-v8": "5.0.5",
     "publint": "0.3.25",
