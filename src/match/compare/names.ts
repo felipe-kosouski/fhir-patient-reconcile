@@ -1,4 +1,4 @@
-import type { NormalizedName } from '../../normalize/name.js';
+import type { GenerationalSuffix, NormalizedName } from '../../normalize/name.js';
 import { jaroWinkler } from '../../similarity/jaro-winkler.js';
 import { fieldResult, type MatchContext } from '../context.js';
 import type { FieldResult } from '../types.js';
@@ -7,8 +7,20 @@ export interface NameComparison {
   given: FieldResult;
   family: FieldResult;
   middle: FieldResult;
-  /** The name pair the results come from, for the suffix veto. Absent when nothing compared. */
-  pair?: readonly [NormalizedName, NormalizedName];
+  /** The chosen name pair carries different generations (Jr. vs Sr., Filho vs Neto). */
+  suffixConflict: boolean;
+}
+
+/**
+ * Júnior and Filho both mark a son registered with his father's exact name: the same generation,
+ * chosen at registration, so they never conflict with each other (owner decision, session 8).
+ */
+const SAME_GENERATION: ReadonlySet<GenerationalSuffix> = new Set(['junior', 'filho']);
+
+/** Both names carry a generational suffix, and the suffixes name different generations. */
+export function suffixesConflict(a: NormalizedName, b: NormalizedName): boolean {
+  if (a.suffix === undefined || b.suffix === undefined || a.suffix === b.suffix) return false;
+  return !(SAME_GENERATION.has(a.suffix) && SAME_GENERATION.has(b.suffix));
 }
 
 /**
@@ -35,7 +47,10 @@ interface PreparedName {
 /**
  * Compares every local name with every incoming name and keeps the pair with the most points,
  * so a maiden name kept in `name[]` still matches. Given, family and middle always come from
- * the same pair, never mixed. Ties keep the first pair in input order.
+ * the same pair, never mixed.
+ *
+ * On a tie in points, a pair whose suffixes conflict wins (then the first in input order): the
+ * veto must not depend on argument order, and when in doubt it should fire.
  */
 export function compareNames(
   local: readonly NormalizedName[],
@@ -56,8 +71,12 @@ export function compareNames(
       const all = [results.given, results.family, results.middle];
       if (all.every((r) => r.outcome === 'missing')) continue;
       const points = all.reduce((sum, r) => sum + r.points, 0);
-      if (points > bestPoints) {
-        best = { ...results, pair: [a.name, b.name] };
+      const suffixConflict = suffixesConflict(a.name, b.name);
+      const better =
+        points > bestPoints ||
+        (points === bestPoints && suffixConflict && best?.suffixConflict === false);
+      if (better) {
+        best = { ...results, suffixConflict };
         bestPoints = points;
       }
     }
@@ -67,6 +86,7 @@ export function compareNames(
       given: fieldResult(ctx, 'given', 'missing', 'no comparable name on one or both sides'),
       family: fieldResult(ctx, 'family', 'missing', 'no comparable name on one or both sides'),
       middle: fieldResult(ctx, 'middle', 'missing', 'no comparable name on one or both sides'),
+      suffixConflict: false,
     }
   );
 }

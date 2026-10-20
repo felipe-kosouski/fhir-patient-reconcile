@@ -1,6 +1,22 @@
 // Public API entry point. Only re-exports belong here.
 
 export {
+  DEFAULT_THRESHOLDS,
+  DEFAULT_WEIGHTS,
+  type FhirMatchGrade,
+  type FieldOutcome,
+  type FieldResult,
+  type FieldWeightOverrides,
+  type FieldWeights,
+  type MatchDecision,
+  type MatchField,
+  type MatchOptions,
+  type MatchResult,
+  type MatchThresholds,
+  matchPatients,
+  type Veto,
+} from './match/index.js';
+export {
   type AddressCountry,
   type BirthDatePrecision,
   type GenerationalSuffix,

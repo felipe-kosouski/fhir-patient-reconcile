@@ -7,11 +7,12 @@ import type {
   CodeableConceptLike,
   CodingLike,
   ContactPointLike,
+  FieldWeightOverrides,
   HumanNameLike,
   IdentifierLike,
+  MatchOptions,
   PatientLike,
 } from '../../src/index.js';
-import type { FieldWeightOverrides, MatchOptions } from '../../src/match/types.js';
 
 type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
 
@@ -46,6 +47,9 @@ describe('every optional property is `?: T | undefined`', () => {
     >().toEqualTypeOf<true>();
     expectTypeOf<
       OptionalsAcceptUndefined<Exclude<Nested['nameSimilarity'], undefined>>
+    >().toEqualTypeOf<true>();
+    expectTypeOf<
+      OptionalsAcceptUndefined<Exclude<Nested['thresholds'], undefined>>
     >().toEqualTypeOf<true>();
     expectTypeOf<
       OptionalsAcceptUndefined<Exclude<Nested['weights'], undefined>>

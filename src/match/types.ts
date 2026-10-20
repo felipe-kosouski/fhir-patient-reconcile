@@ -42,6 +42,8 @@ export interface FieldWeightOverrides {
 export interface MatchOptions {
   /** Overrides merged over `DEFAULT_WEIGHTS`, field by field and outcome by outcome. */
   weights?: Opt<Partial<Record<MatchField, Opt<FieldWeightOverrides>>>>;
+  /** Point thresholds, merged over `DEFAULT_THRESHOLDS`. `possible` must not exceed `match`. */
+  thresholds?: Opt<{ match?: Opt<number>; possible?: Opt<number> }>;
   /** Country assumed for phone numbers without a country code. */
   defaultCountry?: Opt<PhoneCountry>;
   /**
@@ -73,4 +75,35 @@ export interface FieldResult {
   incoming?: string;
   /** Jaro-Winkler similarity (0..1) when a fuzzy name comparison ran. */
   similarity?: number;
+}
+
+export type MatchDecision = 'match' | 'possible' | 'no-match';
+
+/** FHIR `match-grade` extension vocabulary, as used by `Patient/$match`. */
+export type FhirMatchGrade = 'certain' | 'probable' | 'possible' | 'certainly-not';
+
+export interface MatchThresholds {
+  match: number;
+  possible: number;
+}
+
+export interface Veto {
+  code: 'identifier-conflict' | 'generational-suffix-conflict' | 'birthdate-conflict';
+  /** Human-readable; never contains patient values. */
+  reason: string;
+}
+
+export interface MatchResult {
+  decision: MatchDecision;
+  /** `null` when `Patient/$match` would not return the candidate at all (no-match, no veto). */
+  matchGrade: FhirMatchGrade | null;
+  /** 0..1, for ranking candidates. Not a probability. */
+  score: number;
+  points: number;
+  thresholds: MatchThresholds;
+  /** One result per field, in `MatchField` order. */
+  fields: FieldResult[];
+  vetoes: Veto[];
+  /** True when name, birth date and one more identifying field do not all agree: never `match`. */
+  insufficientEvidence: boolean;
 }

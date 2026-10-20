@@ -7,9 +7,9 @@
 ![license](https://img.shields.io/badge/license-Apache--2.0-blue)
 
 > [!NOTE]
-> **Work in progress.** The foundations (types, build, CI, and normalizers for names, phones,
-> emails, birth dates, addresses and CPF) are done. Matching and merging are being built next,
-> and the package is not on npm yet.
+> **Work in progress.** Normalizers and `matchPatients` work today; calibration against the
+> hard-case table and the fail-closed merge are being built next, and the package is not on npm
+> yet.
 > See [Status](#status) for exactly what works today.
 
 ## The problem
@@ -61,12 +61,56 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | `normalizeBirthDate` (partial dates), `normalizeAddress` (CEP/ZIP + street line), `normalizeCpf` | ✅ done |
 | Hard-case table for matching: 40 cases with expected decisions, written before any weights | ✅ done |
 | `jaroWinkler`, `damerauLevenshtein` (checked against published reference values) | ✅ done |
-| Per-field comparators (outcome, points and a reason without patient values, per field) | ✅ done (internal, used by `matchPatients`) |
-| `matchPatients` (weights, thresholds, vetoes, FHIR `match-grade`) | 🚧 next |
+| Per-field comparators (outcome, points and a reason without patient values, per field) | ✅ done |
+| `matchPatients` (weights, thresholds, vetoes, minimum evidence, FHIR `match-grade`) | ✅ done: 39 of 40 hard cases pass |
+| Calibration against the hard-case table; known limitations documented | 🚧 next |
 | `mergePatient` (fail-closed, change report) | ⏳ planned |
 | npm release `0.1.0` with provenance | ⏳ planned |
 
 ## What works today
+
+```ts
+import { matchPatients } from 'fhir-patient-reconcile';
+
+const local = {
+  resourceType: 'Patient',
+  name: [{ family: 'Souza', given: ['João', 'Pedro'] }],
+  birthDate: '1987-03-14',
+  telecom: [{ system: 'phone', value: '(41) 99876-5432' }],
+} as const;
+
+const incoming = {
+  resourceType: 'Patient',
+  name: [{ family: 'SOUZA', given: ['Joao'] }],
+  birthDate: '1987-03-14',
+  telecom: [
+    { system: 'phone', value: '+55 41 99876 5432' },
+    { system: 'email', value: 'joao.souza@example.com' },
+  ],
+} as const;
+
+const result = matchPatients(local, incoming, { defaultCountry: 'BR' });
+result.decision;   // 'match'
+result.matchGrade; // 'certain' (FHIR $match vocabulary)
+result.points;     // 17 (match needs 14, plus name + birth date + one more agreeing field)
+result.fields;     // one entry per field, no patient values unless includeValues: true
+//   family     exact    +4  "every family name on one side appears on the other"
+//   given      exact    +4  "first given names are equal"
+//   middle     missing   0  "no middle name on one or both sides"   (never penalized)
+//   birthDate  exact    +5  "birth dates are equal"
+//   phone      exact    +4  "a phone number is shared"
+//   email      missing   0  "no usable email address on one or both sides"
+
+const twin = { ...incoming, name: [{ family: 'Souza', given: ['Joana'] }] } as const;
+matchPatients(local, twin, { defaultCountry: 'BR' }).decision;
+// 'possible' (10 points): a different first name never merges automatically
+
+const grandson = { ...local, name: [{ family: 'Souza Neto', given: ['João'] }], birthDate: '2010-05-02' } as const;
+matchPatients({ ...local, name: [{ family: 'Souza Filho', given: ['João'] }] }, grandson).vetoes;
+// [generational-suffix-conflict, birthdate-conflict]: decision 'no-match', grade 'certainly-not'
+```
+
+Building blocks, also exported:
 
 ```ts
 import {
@@ -134,10 +178,6 @@ Not implemented yet. This is the target the work above builds toward.
 import { matchPatients, mergePatient } from 'fhir-patient-reconcile';
 
 const match = matchPatients(local, incoming, { defaultCountry: 'BR' });
-match.decision;   // 'match' | 'possible' | 'no-match'
-match.matchGrade; // 'certain' | 'probable' | 'possible' | 'certainly-not' | null (FHIR $match vocabulary)
-match.fields;     // per-field outcome, points and reason, without raw values
-
 const result = mergePatient(local, incoming, {
   match,
   protectedPaths: ['telecom.phone', 'address'], // a human confirmed these

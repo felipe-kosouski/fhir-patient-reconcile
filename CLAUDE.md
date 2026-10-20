@@ -53,6 +53,16 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Identifiers: trusted systems only (default: RNDS CPF; `identifierSystems.trusted` replaces the list); CPF values validated with `normalizeCpf`, others trimmed. Any trusted system with disjoint values is a conflict even if another agrees (fail closed).
 - Every `MatchOptions` property (and nested ones) is `?: T | undefined`, checked in `test/types/rules.test-d.ts`.
 
+## matchPatients (session 8)
+- From the plan: `points` = sum of field points; `match` at >= 14, `possible` at >= 8 (`DEFAULT_THRESHOLDS`); `score` = points / sum of `exact` weights, clamped to 0..1; grade: match = certain, possible >= midpoint of the thresholds (11) = probable, else possible; no-match with a veto = certainly-not, without = `null`.
+- Owner decisions:
+  - A veto forces `no-match` (`certainly-not`). Birth-date veto only when the years differ (a same-year conflict costs points and stays reviewable; partial dates count).
+  - Suffix veto when the chosen name pair has different generations; **Júnior and Filho are the same generation** (both = son with the father's exact name; vLex "Nome da pessoa natural", Crátilo 2019) and never conflict. On a tie between name pairs, the conflicting pair wins (keeps the veto symmetric).
+  - Minimum evidence for `match` = agreement (exact or fuzzy) of given AND family, birth date, and one of identifier/phone/email/address.
+  - An exact trusted identifier floors the decision at `possible`, even with a veto (owner decision 4 generalized).
+  - Invalid options throw `RangeError` (non-finite weights/thresholds, `fuzzyMin` outside 0..1, possible > match).
+- Hard cases run in `test/cases/match-cases.match.test.ts`; failures go in `PENDING_CALIBRATION` with `it.fails` (turns red once fixed). Pending after session 8: `name-only` (8 points = possible threshold).
+
 ## Untrusted input: bounded work (session 7 review, owner decisions)
 - The incoming record is untrusted, so no input may cause super-linear work without a bound. Measure hostile inputs (long runs, huge arrays) when adding a normalizer or comparator; quadratic code has shipped twice (phone regex, address markers).
 - Names and addresses: duplicates dropped, then at most `MAX_ENTRIES` = 10 per side compared. Jaro-Winkler on at most the first 10 tokens of a name part (set equality uses all) and only on tokens of at most 40 characters (longer: equality only). Worst case for a hostile record ~0.1 s; typical pair ~0.02 ms.

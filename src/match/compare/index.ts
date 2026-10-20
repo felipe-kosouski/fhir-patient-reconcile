@@ -1,4 +1,3 @@
-import type { NormalizedName } from '../../normalize/name.js';
 import type { PatientLike } from '../../types/fhir.js';
 import { type MatchContext, resolveContext } from '../context.js';
 import { preparePatient } from '../prepare.js';
@@ -11,8 +10,10 @@ import { compareNames } from './names.js';
 export interface FieldComparison {
   /** One result per field, in `MatchField` order. */
   fields: FieldResult[];
-  /** The name pair the name results come from (for the generational-suffix veto). */
-  namePair?: readonly [NormalizedName, NormalizedName];
+  /** The chosen name pair carries different generations (for the suffix veto). */
+  suffixConflict: boolean;
+  /** Both birth dates are usable and their years differ (for the birth-date veto). */
+  birthYearsDiffer: boolean;
   ctx: MatchContext;
 }
 
@@ -26,7 +27,7 @@ export function compareFields(
   const a = preparePatient(local, ctx);
   const b = preparePatient(incoming, ctx);
   const names = compareNames(a.names, b.names, ctx);
-  const comparison: FieldComparison = {
+  return {
     fields: [
       compareIdentifiers(a.identifiers, b.identifiers, ctx),
       names.family,
@@ -38,8 +39,11 @@ export function compareFields(
       compareAddresses(a.addresses, b.addresses, ctx),
       compareGender(a.gender, b.gender, ctx),
     ],
+    suffixConflict: names.suffixConflict,
+    birthYearsDiffer:
+      a.birthDate !== undefined &&
+      b.birthDate !== undefined &&
+      a.birthDate.year !== b.birthDate.year,
     ctx,
   };
-  if (names.pair !== undefined) comparison.namePair = names.pair;
-  return comparison;
 }

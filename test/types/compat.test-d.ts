@@ -5,11 +5,10 @@ import type { Patient as MedplumPatient } from '@medplum/fhirtypes';
 import type { Patient as R4Patient } from 'fhir/r4.js';
 import type { Patient as R5Patient } from 'fhir/r5.js';
 import { describe, expectTypeOf, it } from 'vitest';
-import type { PatientLike } from '../../src/index.js';
+import { matchPatients, type PatientLike } from '../../src/index.js';
 
-// Stand-ins with the planned signatures of matchPatients and mergePatient, so the
-// constraints are tested before the functions exist. Replaced by the real ones later.
-declare function takesPatient(local: PatientLike, incoming: PatientLike): void;
+// Stand-in with the planned signature of mergePatient, so the constraint is tested before the
+// function exists. Replaced by the real one in session 11.
 declare function keepsType<P extends PatientLike>(local: P, incoming: PatientLike): P;
 
 describe('PatientLike accepts third-party Patient types without casts', () => {
@@ -25,9 +24,12 @@ describe('PatientLike accepts third-party Patient types without casts', () => {
     expectTypeOf<MedplumPatient>().toExtend<PatientLike>();
   });
 
-  it('mixes packages in one call', () => {
-    expectTypeOf(takesPatient).toBeCallableWith({} as R4Patient, {} as MedplumPatient);
-    expectTypeOf(takesPatient).toBeCallableWith({} as MedplumPatient, {} as R5Patient);
+  it('matchPatients mixes packages in one call', () => {
+    expectTypeOf(matchPatients).toBeCallableWith({} as R4Patient, {} as MedplumPatient);
+    expectTypeOf(matchPatients).toBeCallableWith({} as MedplumPatient, {} as R5Patient);
+    expectTypeOf(matchPatients).toBeCallableWith({} as R4Patient, {} as R4Patient, {
+      defaultCountry: 'BR',
+    });
   });
 });
 
@@ -41,7 +43,7 @@ describe('a generic constraint returns the caller type', () => {
 
 describe('object literals', () => {
   it('accepts an inline literal at the call site', () => {
-    takesPatient({ resourceType: 'Patient', name: [{ family: 'Souza', given: ['Joao'] }] }, {
+    matchPatients({ resourceType: 'Patient', name: [{ family: 'Souza', given: ['Joao'] }] }, {
       resourceType: 'Patient',
     } as R4Patient);
   });
@@ -72,26 +74,26 @@ describe('object literals', () => {
     // `const` object. Callers use `as const`, `satisfies PatientLike` or a type annotation.
     const widened = { resourceType: 'Patient', birthDate: '1987-03-14' };
     // @ts-expect-error resourceType is string, not 'Patient'
-    takesPatient(widened, widened);
+    matchPatients(widened, widened);
 
     const satisfied = { resourceType: 'Patient', birthDate: '1987-03-14' } satisfies PatientLike;
-    takesPatient(satisfied, satisfied);
+    matchPatients(satisfied, satisfied);
   });
 });
 
 describe('rejections', () => {
   it('rejects other resource types', () => {
     // @ts-expect-error not a Patient
-    takesPatient({ resourceType: 'Observation' }, { resourceType: 'Patient' });
+    matchPatients({ resourceType: 'Observation' }, { resourceType: 'Patient' });
   });
 
   it('rejects a missing resourceType', () => {
     // @ts-expect-error resourceType is required
-    takesPatient({ birthDate: '1987-03-14' }, { resourceType: 'Patient' });
+    matchPatients({ birthDate: '1987-03-14' }, { resourceType: 'Patient' });
   });
 
   it('rejects an invalid gender code', () => {
     // @ts-expect-error gender is a closed FHIR value set
-    takesPatient({ resourceType: 'Patient', gender: 'M' }, { resourceType: 'Patient' });
+    matchPatients({ resourceType: 'Patient', gender: 'M' }, { resourceType: 'Patient' });
   });
 });

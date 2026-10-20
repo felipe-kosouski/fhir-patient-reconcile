@@ -592,12 +592,43 @@ describe('name pairs', () => {
     expect(outcomes.map((r) => r.outcome).sort()).toEqual(['conflict', 'exact']);
   });
 
-  it('returns the chosen pair, so the matcher can check generational suffixes', () => {
-    const { namePair } = compareFields(
-      patient({ name: [{ given: ['Robert'], family: 'Miller', suffix: ['Jr.'] }] }),
-      patient({ name: [{ given: ['Robert'], family: 'Miller', suffix: ['Sr.'] }] }),
-    );
-    expect(namePair?.map((name) => name.suffix)).toEqual(['junior', 'senior']);
+  it.each([
+    ['Jr.', 'Sr.', true, 'father and son'],
+    ['Filho', 'Neto', true, 'son and grandson'],
+    ['Júnior', 'Neto', true, 'son and grandson'],
+    ['II', 'III', true, 'different numerals'],
+    ['Júnior', 'Filho', false, 'both mark a son with the father’s name (same generation)'],
+    ['Jr.', 'Jr.', false, 'the same suffix'],
+    ['Jr.', undefined, false, 'a suffix on one side only'],
+  ] as ReadonlyArray<readonly [string, string | undefined, boolean, string]>)(
+    'suffixes %s / %s conflict: %s (%s)',
+    (a, b, conflict) => {
+      const named = (suffix: string | undefined) =>
+        patient({
+          name: [
+            {
+              given: ['José'],
+              family: 'Souza',
+              ...(suffix === undefined ? {} : { suffix: [suffix] }),
+            },
+          ],
+        });
+      expect(compareFields(named(a), named(b)).suffixConflict).toBe(conflict);
+    },
+  );
+
+  it('on a tie in points, prefers the name pair whose suffixes conflict (order-independent)', () => {
+    // Both pairs score the same; only one of them carries different generations.
+    const local = patient({
+      // The pair without a conflict comes first, so input order alone would pick it.
+      name: [
+        { given: ['José'], family: 'Souza' },
+        { given: ['José'], family: 'Souza', suffix: ['Jr.'] },
+      ],
+    });
+    const incoming = patient({ name: [{ given: ['José'], family: 'Souza', suffix: ['Sr.'] }] });
+    expect(compareFields(local, incoming).suffixConflict).toBe(true);
+    expect(compareFields(incoming, local).suffixConflict).toBe(true);
   });
 
   it('reports the Jaro-Winkler similarity of a fuzzy name', () => {
