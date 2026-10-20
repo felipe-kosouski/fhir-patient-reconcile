@@ -54,7 +54,7 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Every `MatchOptions` property (and nested ones) is `?: T | undefined`, checked in `test/types/rules.test-d.ts`.
 
 ## matchPatients (session 8)
-- From the plan: `points` = sum of field points; `match` at >= 14, `possible` at >= 8 (`DEFAULT_THRESHOLDS`); `score` = points / sum of `exact` weights, clamped to 0..1; grade: match = certain, possible >= midpoint of the thresholds (11) = probable, else possible; no-match with a veto = certainly-not, without = `null`.
+- From the plan: `points` = sum of field points; `match` at >= 14, `possible` at >= 8 (`DEFAULT_THRESHOLDS`); `score` = points / sum of `exact` weights, clamped to 0..1; grade: match = certain, possible >= midpoint of the thresholds (11) = probable, else possible (see the grade decision below); no-match with a veto = certainly-not, without = `null`.
 - Owner decisions:
   - A veto forces `no-match` (`certainly-not`). Birth-date veto only when the years differ (a same-year conflict costs points and stays reviewable; partial dates count).
   - Suffix veto when the chosen name pair has different generations; **Júnior and Filho are the same generation** (both = son with the father's exact name; vLex "Nome da pessoa natural", Crátilo 2019) and never conflict. On a tie between name pairs, the conflicting pair wins (keeps the veto symmetric).
@@ -78,6 +78,7 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Twins with a shared compound first name (Maria Clara / Maria Eduarda) were auto-matched (20 points). A middle-name **conflict** now blocks `match` (counts as insufficient evidence); missing or initial-only middle names still never block. Hard case `twins-compound-first-name`.
 - A custom `normalizePhone` result is unusable when empty, not a string, or its last 8 digits are one repeated digit (the built-in placeholder rule), so equal placeholders never agree whatever hook is plugged in.
 - CI runners pinned to `ubuntu-24.04` (upgrade deliberately).
+- Grade (owner decision): `probable` only with sufficient evidence and no veto; any other `possible` is graded `possible`, whatever the points. FHIR R4 match-grade: probable = "close match… review may be required", possible = "review SHOULD be performed". Before this, all 9 probables in the table (including the three twins cases) lacked sufficient evidence.
 - When looking for false matches, think about who shares everything except one field: twins (gendered names, compound first names), parent/child (suffix, date), spouses (name). Each needs a hard case.
 
 ## Untrusted input: bounded work (session 7 review, owner decisions)

@@ -26,7 +26,8 @@ export const DEFAULT_NAME_FUZZY_MIN = 0.92;
 
 /**
  * Points needed for each decision. `match` also needs sufficient evidence and no veto. A
- * `possible` at or above the midpoint between the two is FHIR `probable`.
+ * `possible` with sufficient evidence and no veto, at or above the midpoint between the two, is
+ * FHIR `probable`.
  */
 export const DEFAULT_THRESHOLDS: Readonly<MatchThresholds> = Object.freeze({
   match: 14,

@@ -42,34 +42,34 @@ The expected answers were written before any matching code existed (five were ad
 | `birthdate-day-month-swapped-name-only` | possible | possible | possible | 10 |  | pass |
 | `birthdate-off-by-one-day` | match | match | certain | 18 |  | pass |
 | `birthdate-one-year-digit` | match | match | certain | 18 |  | pass |
-| `partial-birthdate-year-only` | possible | possible | probable | 12 |  | pass |
+| `partial-birthdate-year-only` | possible | possible | possible | 12 |  | pass |
 | `partial-birthdate-conflict` | no-match | no-match | certainly-not | 6 | birthdate-conflict | pass |
-| `twins` | possible or no-match | possible | probable | 13 |  | pass |
-| `twins-boy-girl` | possible or no-match | possible | probable | 13 |  | pass |
-| `twins-compound-first-name` | possible or no-match | possible | probable | 20 |  | pass |
+| `twins` | possible or no-match | possible | possible | 13 |  | pass |
+| `twins-boy-girl` | possible or no-match | possible | possible | 13 |  | pass |
+| `twins-compound-first-name` | possible or no-match | possible | possible | 20 |  | pass |
 | `junior-vs-senior` | no-match | no-match | certainly-not | 6 | generational-suffix-conflict, birthdate-conflict | pass |
 | `filho-vs-neto` | no-match | no-match | certainly-not | 6 | generational-suffix-conflict, birthdate-conflict | pass |
 | `filho-missing-on-one-side` | match | match | certain | 17 |  | pass |
 | `father-and-son-without-suffix` | no-match | no-match | certainly-not | 9 | birthdate-conflict | pass |
 | `shared-family-landline` | no-match | no-match | certainly-not | -1 | birthdate-conflict | pass |
-| `married-surname-replaced` | possible | possible | probable | 14 |  | pass |
+| `married-surname-replaced` | possible | possible | possible | 14 |  | pass |
 | `married-surname-added` | match | match | certain | 17 |  | pass |
 | `same-cpf-same-person` | match | match | certain | 23 |  | pass |
 | `same-cpf-different-name` | possible | possible | possible | 4 |  | pass |
 | `different-cpf-everything-else-equal` | no-match | no-match | certainly-not | 7 | identifier-conflict | pass |
 | `identifier-without-system` | no-match | no-match | certainly-not | -12 | birthdate-conflict | pass |
-| `untrusted-system-with-name-and-birthdate` | possible | possible | probable | 13 |  | pass |
+| `untrusted-system-with-name-and-birthdate` | possible | possible | possible | 13 |  | pass |
 | `ssn-not-trusted-by-default` | no-match | no-match | certainly-not | -12 | birthdate-conflict | pass |
 | `placeholders-are-not-agreement` | no-match | no-match |  | -1 |  | pass |
-| `placeholders-cannot-confirm` | possible | possible | probable | 13 |  | pass |
+| `placeholders-cannot-confirm` | possible | possible | possible | 13 |  | pass |
 | `newborn-registered-twice` | possible | possible | possible | 9 |  | pass |
 | `newborn-named-later` | possible | possible | possible | 9 |  | pass |
 | `family-spelling-variant-z-s` | match | possible | possible | 10 |  | **known limitation** |
 | `given-spelling-variant-z-s` | match | possible | possible | 10 |  | **known limitation** |
 | `given-spelling-variant-k-c` | match | possible | possible | 10 |  | **known limitation** |
 | `name-only` | no-match | no-match |  | 8 |  | pass |
-| `name-and-birthdate-only` | possible | possible | probable | 13 |  | pass |
-| `name-and-birthdate-contacts-conflict` | possible | possible | probable | 11 |  | pass |
+| `name-and-birthdate-only` | possible | possible | possible | 13 |  | pass |
+| `name-and-birthdate-contacts-conflict` | possible | possible | possible | 11 |  | pass |
 | `nothing-to-compare` | no-match | no-match |  | 0 |  | pass |
 
 ## Known limitations

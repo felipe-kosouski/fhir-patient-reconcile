@@ -192,6 +192,7 @@ describe('matchPatients', () => {
         if (r.decision === 'no-match') expect(r.matchGrade).toBe(vetoed ? 'certainly-not' : null);
         if (r.decision === 'possible') {
           expect(['probable', 'possible']).toContain(r.matchGrade);
+          if (vetoed || r.insufficientEvidence) expect(r.matchGrade).toBe('possible');
           const beyondName = ['birthDate', 'identifier', 'phone', 'email', 'address'];
           const agreeing = r.fields.filter(
             (f) => beyondName.includes(f.field) && (f.outcome === 'exact' || f.outcome === 'fuzzy'),

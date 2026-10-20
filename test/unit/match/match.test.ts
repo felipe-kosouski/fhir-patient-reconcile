@@ -34,27 +34,40 @@ describe('decision', () => {
     });
   });
 
-  it('possible at or above the midpoint is FHIR "probable", below it "possible"', () => {
-    // Name + date only: 13 points, insufficient evidence (nothing corroborates them).
+  it('probable needs sufficient evidence and points at or above the midpoint (11)', () => {
+    // Everything required agrees, just short of a match: first-name typo (+2), family (+4),
+    // swapped day and month (+2), same mobile (+4) = 12.
+    const close = (given: string, birthDate: string, family = 'Souza') =>
+      patient({ ...joao, name: [{ given: [given], family }], birthDate });
     const probable = matchPatients(
-      patient({ name: joao.name, birthDate: joao.birthDate }),
-      patient({ name: joao.name, birthDate: joao.birthDate }),
+      close('Gabriela', '1987-03-04'),
+      close('Grabiela', '1987-04-03'),
     );
     expect([probable.decision, probable.matchGrade, probable.points]).toEqual([
       'possible',
       'probable',
-      13,
+      12,
     ]);
-    // Day and month swapped: 4 + 4 + 2 = 10, below the midpoint 11.
-    const possible = matchPatients(
-      patient({ name: joao.name, birthDate: '1987-03-04' }),
-      patient({ name: joao.name, birthDate: '1987-04-03' }),
+    // Same evidence, both names near spellings: 2 + 2 + 2 + 4 = 10, below the midpoint.
+    const below = matchPatients(
+      close('Gabriela', '1987-03-04', 'Oliveira'),
+      close('Grabiela', '1987-04-03', 'Olivera'),
     );
-    expect([possible.decision, possible.matchGrade, possible.points]).toEqual([
-      'possible',
-      'possible',
-      10,
-    ]);
+    expect([below.decision, below.matchGrade, below.points]).toEqual(['possible', 'possible', 10]);
+  });
+
+  it('without sufficient evidence the grade is possible, however many points', () => {
+    // FHIR: probable = "review may be required", possible = "review SHOULD be performed".
+    // Name + date only: 13 points, nothing corroborates them.
+    const nameAndDate = matchPatients(
+      patient({ name: joao.name, birthDate: joao.birthDate }),
+      patient({ name: joao.name, birthDate: joao.birthDate }),
+    );
+    expect([nameAndDate.points, nameAndDate.matchGrade]).toEqual([13, 'possible']);
+    // Twins sharing a compound first name: 20 points, middle names conflict.
+    const named = (given: string[]) => patient({ ...joao, name: [{ given, family: 'Souza' }] });
+    const twins = matchPatients(named(['Maria', 'Clara']), named(['Maria', 'Eduarda']));
+    expect([twins.decision, twins.matchGrade]).toEqual(['possible', 'possible']);
   });
 
   it('no-match without a veto has no FHIR grade ($match would not return it)', () => {

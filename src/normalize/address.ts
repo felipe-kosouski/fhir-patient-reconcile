@@ -109,7 +109,7 @@ const US_ABBREVIATIONS: ReadonlyMap<string, string> = new Map(
   }),
 );
 
-/** Unknown country: "Av" and "Dr" mean different things in Brazil and the US, so nothing expands. */
+/** Unknown country: nothing expands ("Av" and "Dr" mean different things in Brazil and the US). */
 const NO_ABBREVIATIONS: ReadonlyMap<string, string> = new Map();
 
 /**

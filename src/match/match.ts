@@ -26,16 +26,18 @@ const BEYOND_NAME: readonly MatchField[] = ['birthDate', ...CORROBORATING];
  *   the configured weights allow, clamped to 0..1. It ranks candidates and is not a probability.
  * - `match` needs `points >= thresholds.match`, no veto, and sufficient evidence: given and family
  *   names, birth date, and one of identifier, phone, email or address must all agree (exact or
- *   fuzzy), and the middle names must not conflict (twins often share a compound first name). `possible` needs `points >= thresholds.possible`, no veto, and one agreeing field
- *   besides the name (birth date, identifier, phone, email or address): a shared name alone
- *   identifies nobody.
+ *   fuzzy), and the middle names must not conflict (twins often share a compound first name).
+ * - `possible` needs `points >= thresholds.possible`, no veto, and one agreeing field besides
+ *   the name (birth date, identifier, phone, email or address): a shared name alone identifies
+ *   nobody.
  * - Vetoes (decision `no-match`, grade `certainly-not`): two different trusted identifiers;
  *   generational suffixes of different generations; birth dates in different years.
  * - An equal trusted identifier always makes the decision at least `possible`, even with a veto:
  *   a shared CPF between two records needs a human look. With a veto, the grade is `possible`.
- * - `matchGrade` follows the FHIR `match-grade` vocabulary: `match` is `certain`; `possible` at
- *   or above the midpoint between the thresholds is `probable`, below it `possible`; `no-match`
- *   with a veto is `certainly-not`, without one `null` (`$match` would not return it).
+ * - `matchGrade` follows the FHIR `match-grade` vocabulary: `match` is `certain`; `possible` is
+ *   `probable` only with sufficient evidence, no veto and points at or above the midpoint between
+ *   the thresholds, otherwise `possible`; `no-match` with a veto is `certainly-not`, without one
+ *   `null` (`$match` would not return it).
  *
  * Symmetric: swapping `local` and `incoming` gives the same decision, points and vetoes. Inputs
  * are never mutated, and explanations hold no patient values unless `includeValues` is set.
@@ -95,7 +97,7 @@ export function matchPatients(
   );
   return {
     decision,
-    matchGrade: grade(decision, points, thresholds, vetoes.length > 0),
+    matchGrade: grade(decision, points, thresholds, vetoes.length > 0, insufficientEvidence),
     score: maxPoints > 0 ? clamp(points / maxPoints) : 0,
     points,
     thresholds: { ...thresholds },
@@ -105,17 +107,23 @@ export function matchPatients(
   };
 }
 
+/**
+ * FHIR defines `probable` as "a close match… review may be required" and `possible` as "review
+ * SHOULD be performed". So `probable` is only for a pair where everything required agrees and
+ * the points fall just short of a match. A vetoed pair (lifted by an equal identifier) and a pair
+ * without sufficient evidence (twins, a replaced surname, name and birth date only) are
+ * `possible`, however many points they have.
+ */
 function grade(
   decision: MatchDecision,
   points: number,
   thresholds: MatchThresholds,
   vetoed: boolean,
+  insufficientEvidence: boolean,
 ): FhirMatchGrade | null {
   if (decision === 'match') return 'certain';
   if (decision === 'possible') {
-    // A vetoed pair is only here because an equal identifier lifted it: it needs review, and
-    // 'probable' would contradict the veto.
-    if (vetoed) return 'possible';
+    if (vetoed || insufficientEvidence) return 'possible';
     return points >= (thresholds.match + thresholds.possible) / 2 ? 'probable' : 'possible';
   }
   return vetoed ? 'certainly-not' : null;
