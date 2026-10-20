@@ -5,14 +5,14 @@
 export const KNOWN_LIMITATIONS: ReadonlyMap<string, string> = new Map([
   [
     'family-spelling-variant-z-s',
-    'Souza/Sousa scores 0.907 Jaro-Winkler, below the 0.92 cut-off, so the family names conflict. The pair goes to review (possible) instead of matching.',
+    'Souza/Sousa is below the 0.92 Jaro-Winkler cut-off, so the family names conflict. The pair goes to review (possible) instead of matching.',
   ],
   [
     'given-spelling-variant-z-s',
-    'Luiz/Luis scores 0.883 Jaro-Winkler, below the 0.92 cut-off. The pair goes to review (possible) instead of matching.',
+    'Luiz/Luis is below the 0.92 cut-off, so the given names conflict. The pair goes to review (possible) instead of matching.',
   ],
   [
     'given-spelling-variant-k-c',
-    'Kátia/Cátia differ in the first letter, which Jaro-Winkler weighs heavily (0.867). The pair goes to review (possible) instead of matching.',
+    'Kátia/Cátia differ in the first letter, which Jaro-Winkler weighs heavily. The pair goes to review (possible) instead of matching.',
   ],
 ]);

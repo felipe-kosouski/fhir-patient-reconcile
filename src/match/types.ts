@@ -104,6 +104,10 @@ export interface MatchResult {
   /** One result per field, in `MatchField` order. */
   fields: FieldResult[];
   vetoes: Veto[];
-  /** True when name, birth date and one more identifying field do not all agree: never `match`. */
+  /**
+   * True when given name, family name, birth date and one of identifier, phone, email or address
+   * do not all agree: the decision is then never `match`, whatever the points. (`possible`
+   * separately needs one agreeing field besides the name.)
+   */
   insufficientEvidence: boolean;
 }

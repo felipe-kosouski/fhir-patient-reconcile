@@ -361,6 +361,25 @@ export const matchCases: readonly MatchCase[] = [
     why: 'twins share everything but the first name, and they must never be merged',
   },
   {
+    // Added in the session 9 review: the only twins case above has unrelated first names.
+    id: 'twins-boy-girl',
+    local: patient({
+      name: [name(['Daniel'], 'Souza')],
+      birthDate: '2010-05-02',
+      telecom: [phone('(41) 3456-7890')],
+      address: [{ line: ['Rua das Flores 100'], postalCode: '80010-000', country: 'BR' }],
+    }),
+    incoming: patient({
+      name: [name(['Daniela'], 'Souza')],
+      birthDate: '2010-05-02',
+      telecom: [phone('(41) 3456-7890')],
+      address: [{ line: ['Rua das Flores 100'], postalCode: '80010-000', country: 'BR' }],
+    }),
+    options: BR,
+    expected: ['possible', 'no-match'],
+    why: 'boy/girl twins often get the masculine and feminine forms of one name (no gender recorded here)',
+  },
+  {
     id: 'junior-vs-senior',
     local: patient({
       name: [name(['Robert'], 'Miller', 'Jr.')],

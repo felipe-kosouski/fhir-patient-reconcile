@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type HumanNameLike, type PatientLike, RNDS_CPF_SYSTEM } from '../../../src/index.js';
 import { compareFields } from '../../../src/match/compare/index.js';
+import { isGenderedPair } from '../../../src/match/compare/names.js';
 import type { FieldOutcome, MatchField, MatchOptions } from '../../../src/match/types.js';
 
 // All data is synthetic: invented names, example.com emails, NANP 555-01xx, patterned Brazilian
@@ -197,6 +198,13 @@ table('middle', [
     outcome: 'conflict',
     points: 0,
     why: 'different middle names cost nothing by default',
+  },
+  {
+    local: { name: [n(['Ana', 'Paula'], 'Souza')] },
+    incoming: { name: [n(['Ana', 'Paulo'], 'Souza')] },
+    outcome: 'conflict',
+    points: 0,
+    why: 'masculine and feminine forms of a middle name are not a near spelling',
   },
 ]);
 
@@ -579,6 +587,29 @@ table('gender', [
     why: '"unknown" is missing',
   },
 ]);
+
+describe('isGenderedPair', () => {
+  it.each([
+    ['paulo', 'paula', true, 'o and a'],
+    ['alexandre', 'alexandra', true, 'e and a'],
+    ['daniel', 'daniela', true, 'a added'],
+    ['paul', 'paula', true, 'a added (English)'],
+    ['victor', 'victoria', true, 'ia added'],
+    ['daniela', 'daniel', true, 'either order'],
+    ['gabriela', 'grabiela', false, 'a typo, not a gender ending'],
+    ['ana', 'anna', false, 'a doubled letter'],
+    ['maria', 'marta', false, 'a different name'],
+    ['rafael', 'raquel', false, 'two different names'],
+    ['mario', 'marie', false, 'o and e is not a masculine/feminine pair'],
+    ['jo', 'ja', false, 'too short to tell'],
+    ['al', 'ala', false, 'too short to tell (a added)'],
+  ] as ReadonlyArray<readonly [string, string, boolean, string]>)(
+    '%s / %s: %s (%s)',
+    (a, b, expected) => {
+      expect(isGenderedPair(a, b)).toBe(expected);
+    },
+  );
+});
 
 describe('name pairs', () => {
   it('takes given, family and middle from the same name pair, never mixed', () => {

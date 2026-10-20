@@ -113,6 +113,16 @@ function compareGiven(a: NormalizedName, b: NormalizedName, ctx: MatchContext): 
     return fieldResult(ctx, 'given', 'exact', 'first given names are equal', values);
   }
   const similarity = tokenSimilarity(a.given, b.given);
+  if (isGenderedPair(a.given, b.given)) {
+    return fieldResult(
+      ctx,
+      'given',
+      'conflict',
+      'first given names are the masculine and feminine forms of one name',
+      values,
+      similarity,
+    );
+  }
   return similarity >= ctx.fuzzyMin
     ? fieldResult(ctx, 'given', 'fuzzy', 'first given names are similar', values, similarity)
     : fieldResult(ctx, 'given', 'conflict', 'first given names differ', values, similarity);
@@ -162,7 +172,7 @@ function compareMiddle(a: PreparedName, b: PreparedName, ctx: MatchContext): Fie
   if (initials) {
     return fieldResult(ctx, 'middle', 'fuzzy', 'a middle initial agrees', values);
   }
-  const similarity = bestSimilarity(a.fuzzyMiddle, b.fuzzyMiddle);
+  const similarity = bestSimilarity(a.fuzzyMiddle, b.fuzzyMiddle, isGenderedPair);
   return similarity >= ctx.fuzzyMin
     ? fieldResult(ctx, 'middle', 'fuzzy', 'middle names are similar', values, similarity)
     : fieldResult(ctx, 'middle', 'conflict', 'middle names differ', values, similarity);
@@ -187,10 +197,31 @@ function isInitialOf(initial: string, name: string): boolean {
   );
 }
 
-function bestSimilarity(a: readonly string[], b: readonly string[]): number {
+/** The highest similarity over all token pairs, ignoring the pairs `skip` rejects. */
+function bestSimilarity(
+  a: readonly string[],
+  b: readonly string[],
+  skip: (x: string, y: string) => boolean = () => false,
+): number {
   let best = 0;
-  for (const x of a) for (const y of b) best = Math.max(best, tokenSimilarity(x, y));
+  for (const x of a) {
+    for (const y of b) if (!skip(x, y)) best = Math.max(best, tokenSimilarity(x, y));
+  }
   return best;
+}
+
+/**
+ * Masculine and feminine forms of one given name: Paulo/Paula and Alexandre/Alexandra (o or e
+ * against a), Daniel/Daniela and Paul/Paula (a added), Victor/Victoria (ia added). They score
+ * 0.92 to 0.98 in Jaro-Winkler but usually name two people, such as boy/girl twins, so they are a
+ * conflict, never a near spelling. Tokens are already folded (lowercase, no accents).
+ */
+export function isGenderedPair(a: string, b: string): boolean {
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (short.length >= 3 && (long === `${short}a` || long === `${short}ia`)) return true;
+  if (a.length !== b.length || a.length < 3 || a.slice(0, -1) !== b.slice(0, -1)) return false;
+  const endings = new Set([a.at(-1), b.at(-1)]);
+  return endings.has('a') && (endings.has('o') || endings.has('e'));
 }
 
 function tokenSimilarity(a: string, b: string): number {
