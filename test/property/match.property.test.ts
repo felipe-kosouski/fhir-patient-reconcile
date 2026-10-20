@@ -51,7 +51,7 @@ describe('matchPatients: no mutation', () => {
     );
   });
 
-  it('returns no object shared with its inputs or the defaults', () => {
+  it('returns its own thresholds object, so changing the result changes nothing else', () => {
     const p: PatientLike = { resourceType: 'Patient', name: [{ given: ['Ana'] }] };
     const thresholds = { match: 15, possible: 9 };
     const r = matchPatients(p, p, { thresholds });
@@ -147,8 +147,8 @@ describe('matchPatients: no patient values in explanations', () => {
       resourceType: 'Patient',
       name: [{ given: [given], family: 'Zqxsouza' }],
     });
-    const options: MatchOptions = { includeValues: true };
-    expect(JSON.stringify(matchPatients(p('Zqxana'), p('Zqxbia'), options))).toContain(MARKER);
+    const withValues: MatchOptions = { includeValues: true };
+    expect(JSON.stringify(matchPatients(p('Zqxana'), p('Zqxbia'), withValues))).toContain(MARKER);
   });
 });
 
