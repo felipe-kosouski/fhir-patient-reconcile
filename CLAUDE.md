@@ -92,6 +92,7 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Granularity: `name` only when local has no name entry; `telecom` per system (phone, email; sms/fax/others never touched) only when local has no entry of that system; `address` only when local has none. Only entries that normalize are copied, as fresh objects with known string fields (no extensions); duplicates (after normalization) collapse.
 - Change actions: `filled` (origin incoming, carries `source`), `kept-local`, `skipped-duplicate`, `skipped-protected` (origin local), `skipped-invalid` (origin incoming); no entry when incoming offers nothing. `value` (the incoming value) only with `includeValues === true`.
 - Options validated like matchPatients (unknown keys, require, policy, protected paths, types). `structuredClone` is declared in `src/types/globals.d.ts` (ES2023 lib lacks it; Node >= 22 has it).
+- Review (owner decisions): a merge copies at most `MAX_ENTRIES` (10) entries per path, distinct after normalization; a copied name/address/contact entry with a text field over 1,000 characters is invalid; `normalizeEmail` rejects addresses over 254 characters (RFC 5321). Before this, 100,000 incoming emails became 100,000 local entries. Name, phone, email and address paths share `mergeList`.
 - Session 12 adds `arrays: { telecom, address }` with `append-new` and ADR-0002; until then `arrays` is an unknown option.
 
 ## Untrusted input: bounded work (session 7 review, owner decisions)

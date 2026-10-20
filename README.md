@@ -211,7 +211,8 @@ damerauLevenshtein('CA', 'ABC');
   estimated from real data, and `score` is not a probability.
 - **Brazil and the US only** for phones and addresses (other phone formats through
   `normalizePhone`); name rules are tuned for Portuguese and English names.
-- **Bounded comparison.** At most 10 distinct names and 10 addresses per record are compared.
+- **Bounded work.** At most 10 distinct names and 10 addresses per record are compared, and a
+  merge copies at most 10 entries per path; text over 1,000 characters is not copied.
 
 See the [calibration report](docs/calibration.md) for every case.
 

@@ -262,6 +262,45 @@ describe('mergePatient: fill-empty-only', () => {
   });
 });
 
+describe('mergePatient: bounded copies (the incoming record is untrusted)', () => {
+  const base: Fields = {
+    name: [{ given: ['João'], family: 'Souza' }],
+    birthDate: '1987-03-14',
+    telecom: [phone('(41) 99876-5432')],
+  };
+  const merge = (i: Fields) =>
+    mergePatient(patient(base), patient({ ...base, ...i }), { require: 'possible' });
+
+  it('copies at most 10 entries per path, in input order', () => {
+    const emails = Array.from({ length: 1000 }, (_, k) => email(`p${k}@example.com`));
+    const result = merge({ telecom: [...(base.telecom ?? []), ...emails] });
+    const copied = (result.patient.telecom ?? []).filter((c) => c.system === 'email');
+    expect(copied.map((c) => c.value)).toEqual(emails.slice(0, 10).map((c) => c.value));
+  });
+
+  it('an entry with a text field over 1,000 characters is invalid', () => {
+    const long = { line: [`Rua ${'x'.repeat(1000)}`], postalCode: '80010-000' };
+    expect(change(merge({ address: [long] }).changes, 'address')?.action).toBe('skipped-invalid');
+    const fits = { line: [`Rua ${'x'.repeat(990)}`], postalCode: '80010-000' };
+    expect(change(merge({ address: [fits] }).changes, 'address')?.action).toBe('filled');
+  });
+
+  it('entries that normalize alike are copied once, trimmed', () => {
+    const result = mergePatient(
+      nameless,
+      patient({
+        ...nameless,
+        name: [
+          { given: [' João '], family: 'Souza' },
+          { given: ['JOAO'], family: 'SOUZA' },
+        ],
+      }),
+      { require: 'possible' },
+    );
+    expect(result.patient.name).toEqual([{ given: ['João'], family: 'Souza' }]);
+  });
+});
+
 describe('mergePatient: protected paths', () => {
   it.each<[MergeOptions['protectedPaths'], string, Change['action']]>([
     [['telecom'], 'telecom[system=email]', 'skipped-protected'],

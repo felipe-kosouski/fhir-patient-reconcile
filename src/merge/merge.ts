@@ -1,5 +1,6 @@
 import { type MatchContext, resolveContext } from '../match/context.js';
 import { matchPatients } from '../match/match.js';
+import { MAX_ENTRIES } from '../match/prepare.js';
 import type { MatchOptions, MatchResult } from '../match/types.js';
 import { normalizeAddress } from '../normalize/address.js';
 import { normalizeBirthDate } from '../normalize/date.js';
@@ -253,19 +254,25 @@ function mergeNames(
   incoming: PatientLike,
   settings: Settings,
 ): Change | undefined {
-  const entries = objects(incoming.name);
-  const valid = distinctCopies(entries.filter((n) => normalizeName(n) !== undefined).map(copyName));
-  const key = (n: HumanNameLike) => JSON.stringify(normalizeName(n) ?? null);
-  const localKeys = new Set(objects(local.name).map(key));
-  const offer: Offer<HumanNameLike[]> = {
-    present: entries.length > 0,
-    valid: valid.length > 0 ? valid : undefined,
-    duplicate: valid.length > 0 && valid.every((n) => localKeys.has(key(n))),
-    raw: incoming.name,
+  const key = (n: HumanNameLike) => {
+    const normalized = normalizeName(n);
+    return normalized === undefined ? undefined : JSON.stringify(normalized);
   };
-  return decide('name', ['name'], presentArray(local.name), offer, settings, (names) => {
-    target.name = names;
-  });
+  return mergeList(
+    {
+      path: 'name',
+      protectedBy: ['name'],
+      local: objects(local.name),
+      localPresent: presentArray(local.name),
+      incoming: objects(incoming.name),
+      key,
+      copy: copyName,
+      write: (names) => {
+        target.name = names;
+      },
+    },
+    settings,
+  );
 }
 
 function mergeTelecom(
@@ -276,46 +283,30 @@ function mergeTelecom(
   system: 'phone' | 'email',
   ctx: MatchContext,
 ): Change | undefined {
-  const normalize = (value: unknown): string | undefined => {
+  const ofSystem = (telecom: PatientLike['telecom']) =>
+    objects(telecom).filter((c) => c.system === system);
+  const key = ({ value }: ContactPointLike) => {
     if (typeof value !== 'string') return undefined;
     return system === 'phone' ? ctx.phone(value) : normalizeEmail(value);
   };
-  const ofSystem = (telecom: PatientLike['telecom']) =>
-    objects(telecom).filter((c) => c.system === system);
-  const entries = ofSystem(incoming.telecom);
-  const seen = new Set<string>();
-  const valid: ContactPointLike[] = [];
-  for (const entry of entries) {
-    const normalized = normalize(entry.value);
-    if (normalized === undefined || seen.has(normalized)) continue;
-    seen.add(normalized);
-    valid.push(copyContactPoint(entry));
-  }
-  const localValues = new Set(ofSystem(local.telecom).map((c) => normalize(c.value)));
-  const offer: Offer<ContactPointLike[]> = {
-    present: entries.length > 0,
-    valid: valid.length > 0 ? valid : undefined,
-    duplicate: valid.length > 0 && [...seen].every((v) => localValues.has(v)),
-    raw: entries,
-  };
-  // A local telecom that is not an array is data we cannot extend without replacing it.
-  const localPresent =
-    ofSystem(local.telecom).length > 0 ||
-    (local.telecom !== undefined && !Array.isArray(local.telecom));
-  const protectedBy: MergePath[] = [
-    'telecom',
-    system === 'phone' ? 'telecom.phone' : 'telecom.email',
-  ];
-  return decide(
-    `telecom[system=${system}]`,
-    protectedBy,
-    localPresent,
-    offer,
-    settings,
-    (added) => {
-      const current = Array.isArray(target.telecom) ? (target.telecom as unknown[]) : [];
-      target.telecom = [...current, ...added];
+  return mergeList(
+    {
+      path: `telecom[system=${system}]`,
+      protectedBy: ['telecom', system === 'phone' ? 'telecom.phone' : 'telecom.email'],
+      local: ofSystem(local.telecom),
+      // A local telecom that is not an array is data we cannot extend without replacing it.
+      localPresent:
+        ofSystem(local.telecom).length > 0 ||
+        (local.telecom !== undefined && !Array.isArray(local.telecom)),
+      incoming: ofSystem(incoming.telecom),
+      key,
+      copy: copyContactPoint,
+      write: (added) => {
+        const current = Array.isArray(target.telecom) ? (target.telecom as unknown[]) : [];
+        target.telecom = [...current, ...added];
+      },
     },
+    settings,
   );
 }
 
@@ -325,21 +316,67 @@ function mergeAddresses(
   incoming: PatientLike,
   settings: Settings,
 ): Change | undefined {
-  const entries = objects(incoming.address);
-  const valid = distinctCopies(
-    entries.filter((a) => normalizeAddress(a) !== undefined).map(copyAddress),
-  );
-  const key = (a: AddressLike) => JSON.stringify(normalizeAddress(a) ?? null);
-  const localKeys = new Set(objects(local.address).map(key));
-  const offer: Offer<AddressLike[]> = {
-    present: entries.length > 0,
-    valid: valid.length > 0 ? valid : undefined,
-    duplicate: valid.length > 0 && valid.every((a) => localKeys.has(key(a))),
-    raw: incoming.address,
+  const key = (a: AddressLike) => {
+    const normalized = normalizeAddress(a);
+    return normalized === undefined ? undefined : JSON.stringify(normalized);
   };
-  return decide('address', ['address'], presentArray(local.address), offer, settings, (list) => {
-    target.address = list;
-  });
+  return mergeList(
+    {
+      path: 'address',
+      protectedBy: ['address'],
+      local: objects(local.address),
+      localPresent: presentArray(local.address),
+      incoming: objects(incoming.address),
+      key,
+      copy: copyAddress,
+      write: (addresses) => {
+        target.address = addresses;
+      },
+    },
+    settings,
+  );
+}
+
+/** One list path (names, phones, emails, addresses) of a fill-empty-only merge. */
+interface ListPath<T extends object> {
+  path: string;
+  protectedBy: readonly MergePath[];
+  /** Local entries of this kind, for duplicate detection. */
+  local: readonly T[];
+  /** The local record has data here (fill-empty-only never writes then). */
+  localPresent: boolean;
+  incoming: readonly T[];
+  /** Identity after normalization; `undefined` when the entry is unusable. */
+  key: (entry: T) => string | undefined;
+  /** A fresh copy of the known fields; `undefined` when a field is too long. */
+  copy: (entry: T) => T | undefined;
+  write: (entries: T[]) => void;
+}
+
+/**
+ * Valid incoming entries, distinct after normalization and at most `MAX_ENTRIES` (the incoming
+ * record is untrusted: 100,000 emails must not become 100,000 local entries).
+ */
+function mergeList<T extends object>(spec: ListPath<T>, settings: Settings): Change | undefined {
+  const keys = new Set<string>();
+  const valid: T[] = [];
+  for (const entry of spec.incoming) {
+    if (valid.length === MAX_ENTRIES) break;
+    const key = spec.key(entry);
+    if (key === undefined || keys.has(key)) continue;
+    const copy = spec.copy(entry);
+    if (copy === undefined) continue;
+    keys.add(key);
+    valid.push(copy);
+  }
+  const localKeys = new Set(spec.local.map(spec.key));
+  const offer: Offer<T[]> = {
+    present: spec.incoming.length > 0,
+    valid: valid.length > 0 ? valid : undefined,
+    duplicate: valid.length > 0 && [...keys].every((key) => localKeys.has(key)),
+    raw: spec.incoming,
+  };
+  return decide(spec.path, spec.protectedBy, spec.localPresent, offer, settings, spec.write);
 }
 
 // --- reading and copying untrusted input ---
@@ -348,7 +385,7 @@ function hasText(value: unknown): boolean {
   return typeof value === 'string' && value.trim() !== '';
 }
 
-/** `_birthDate` / `_gender`: FHIR JSON keeps extensions of a primitive (data-absent-reason) here. */
+/** `_birthDate` / `_gender`: where FHIR JSON keeps a primitive's extensions. */
 function hasPrimitiveElement(patient: PatientLike, key: string): boolean {
   const value = (patient as unknown as Record<string, unknown>)[key];
   return value !== undefined && value !== null;
@@ -368,16 +405,19 @@ function normalizeIncoming<T>(
   return typeof value === 'string' ? normalize(value) : undefined;
 }
 
-/** Fresh objects with only string fields, so the result shares nothing with the input. */
-function copyName(name: HumanNameLike): HumanNameLike {
+/** Longest text field copied from the incoming record; a longer one makes the entry invalid. */
+const MAX_TEXT_LENGTH = 1_000;
+
+/** Fresh objects with only trimmed string fields, so the result shares nothing with the input. */
+function copyName(name: HumanNameLike): HumanNameLike | undefined {
   return pick(name, ['use', 'text', 'family'], ['given', 'prefix', 'suffix']);
 }
 
-function copyContactPoint(contact: ContactPointLike): ContactPointLike {
+function copyContactPoint(contact: ContactPointLike): ContactPointLike | undefined {
   return pick(contact, ['system', 'value', 'use'], []);
 }
 
-function copyAddress(address: AddressLike): AddressLike {
+function copyAddress(address: AddressLike): AddressLike | undefined {
   return pick(
     address,
     ['use', 'type', 'text', 'city', 'district', 'state', 'postalCode', 'country'],
@@ -389,26 +429,20 @@ function pick<T extends object>(
   source: T,
   scalars: readonly string[],
   lists: readonly string[],
-): T {
+): T | undefined {
   const from = source as Record<string, unknown>;
   const copy: Record<string, unknown> = {};
+  const usable = (values: readonly string[]) => values.map((v) => v.trim()).filter((v) => v !== '');
   for (const key of scalars) {
-    const value = from[key];
-    if (typeof value === 'string' && value.trim() !== '') copy[key] = value.trim();
+    const [value] = usable(strings([from[key]]));
+    if (value === undefined) continue;
+    if (value.length > MAX_TEXT_LENGTH) return undefined;
+    copy[key] = value;
   }
   for (const key of lists) {
-    const values = strings(from[key]).filter((v) => v.trim() !== '');
+    const values = usable(strings(from[key]));
+    if (values.some((v) => v.length > MAX_TEXT_LENGTH)) return undefined;
     if (values.length > 0) copy[key] = values;
   }
   return copy as T;
-}
-
-function distinctCopies<T>(values: readonly T[]): T[] {
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    const key = JSON.stringify(value);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }

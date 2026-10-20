@@ -38,3 +38,15 @@ describe('normalizeEmail', () => {
     expect(normalizeEmail(input)).toBe(expected);
   });
 });
+
+describe('normalizeEmail length (RFC 5321: 254 characters)', () => {
+  // 64 + 1 + 63 + 1 + 63 + 1 + n + 4 characters.
+  const address = (n: number) =>
+    `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(n)}.com`;
+
+  it('accepts 254 characters and rejects 255', () => {
+    expect(address(57)).toHaveLength(254);
+    expect(normalizeEmail(address(57))).toBe(address(57));
+    expect(normalizeEmail(address(58))).toBeUndefined();
+  });
+});
