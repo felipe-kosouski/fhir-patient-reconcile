@@ -160,6 +160,26 @@ describe('mergePatient: fill-empty-only', () => {
     expect(change(merge(l, i).changes, 'birthDate')?.action).toBe(action);
   });
 
+  it.each<[string, unknown]>([
+    ['a number', 19870314],
+    ['an object', { value: '1987-03-14' }],
+    ['a blank string', ' '],
+  ])('local data of the wrong type is still data and never replaced (%s)', (_, value) => {
+    const l = { ...patient(base), birthDate: value, gender: value } as unknown as PatientLike;
+    const result = mergePatient(l, patient({ ...base, birthDate: '1987-03-14', gender: 'male' }), {
+      require: 'possible',
+    });
+    expect(result.status).toBe('merged');
+    expect(result.patient.birthDate).toEqual(value);
+    expect(result.patient.gender).toEqual(value);
+  });
+
+  it('incoming data of the wrong type is reported as invalid', () => {
+    const i = { ...patient(base), birthDate: 19870314 } as unknown as PatientLike;
+    const result = mergePatient(patient(base), i, { require: 'possible' });
+    expect(change(result.changes, 'birthDate')?.action).toBe('skipped-invalid');
+  });
+
   it('a local _birthDate (data-absent-reason) means "deliberately absent": never filled', () => {
     const l = {
       ...patient(base),
@@ -283,6 +303,21 @@ describe('mergePatient: bounded copies (the incoming record is untrusted)', () =
     expect(change(merge({ address: [long] }).changes, 'address')?.action).toBe('skipped-invalid');
     const fits = { line: [`Rua ${'x'.repeat(990)}`], postalCode: '80010-000' };
     expect(change(merge({ address: [fits] }).changes, 'address')?.action).toBe('filled');
+  });
+
+  it('with includeValues, an invalid offer echoes at most 10 incoming entries', () => {
+    const bad = Array.from({ length: 1000 }, (_, k) => email(`bad${k}`));
+    const result = mergePatient(
+      patient(base),
+      patient({ ...base, telecom: [...(base.telecom ?? []), ...bad] }),
+      {
+        require: 'possible',
+        includeValues: true,
+      },
+    );
+    const emails = change(result.changes, 'telecom[system=email]');
+    expect(emails?.action).toBe('skipped-invalid');
+    expect(emails?.value).toHaveLength(10);
   });
 
   it('entries that normalize alike are copied once, trimmed', () => {

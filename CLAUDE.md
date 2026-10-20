@@ -93,6 +93,8 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Change actions: `filled` (origin incoming, carries `source`), `kept-local`, `skipped-duplicate`, `skipped-protected` (origin local), `skipped-invalid` (origin incoming); no entry when incoming offers nothing. `value` (the incoming value) only with `includeValues === true`.
 - Options validated like matchPatients (unknown keys, require, policy, protected paths, types). `structuredClone` is declared in `src/types/globals.d.ts` (ES2023 lib lacks it; Node >= 22 has it).
 - Review (owner decisions): a merge copies at most `MAX_ENTRIES` (10) entries per path, distinct after normalization; a copied name/address/contact entry with a text field over 1,000 characters is invalid; `normalizeEmail` rejects addresses over 254 characters (RFC 5321). Before this, 100,000 incoming emails became 100,000 local entries. Name, phone, email and address paths share `mergeList`.
+- Second review: any local value that is not null/undefined counts as present, whatever its type (a numeric birth date, an object gender, a blank string were overwritten before). With `includeValues`, an invalid list offer echoes at most 10 entries.
+- For session 13's merge properties: random pairs rarely reach a merge, so a property must **force** merges (shared base record plus one varied field), or it passes without testing anything. The overwrite bug above survived 3,000 random pairs and failed at once with a forced generator.
 - Session 12 adds `arrays: { telecom, address }` with `append-new` and ADR-0002; until then `arrays` is an unknown option.
 
 ## Untrusted input: bounded work (session 7 review, owner decisions)

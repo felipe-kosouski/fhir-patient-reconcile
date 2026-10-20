@@ -81,8 +81,9 @@ export function mergePatient<P extends PatientLike>(
   const patient = structuredClone(local);
 
   const refusal = refusalReason(options.match, match, settings.require);
-  if (refusal !== undefined)
+  if (refusal !== undefined) {
     return { status: 'refused', patient, changes: [], match, reason: refusal };
+  }
 
   const ctx = resolveContext(settings.matchOptions);
   const target = patient as unknown as Writable;
@@ -114,8 +115,9 @@ function resolveSettings(options: MergeOptions): Settings {
       );
     }
   }
-  if (source !== undefined && typeof source !== 'string')
+  if (source !== undefined && typeof source !== 'string') {
     throw new TypeError('source must be a string');
+  }
   if (
     options.match !== undefined &&
     (typeof options.match !== 'object' || options.match === null)
@@ -215,14 +217,14 @@ function mergeBirthDate(
 ): Change | undefined {
   const valid = normalizeIncoming(incoming.birthDate, normalizeBirthDate)?.value;
   const offer: Offer<string> = {
-    present: hasText(incoming.birthDate),
+    present: isSet(incoming.birthDate),
     valid,
     duplicate:
       valid !== undefined &&
       normalizeIncoming(local.birthDate, normalizeBirthDate)?.value === valid,
     raw: incoming.birthDate,
   };
-  const localPresent = hasText(local.birthDate) || hasPrimitiveElement(local, '_birthDate');
+  const localPresent = isSet(local.birthDate) || hasPrimitiveElement(local, '_birthDate');
   return decide('birthDate', ['birthDate'], localPresent, offer, settings, (value) => {
     target.birthDate = value;
   });
@@ -237,12 +239,12 @@ function mergeGender(
   const value = incoming.gender;
   const valid = typeof value === 'string' && WRITABLE_GENDERS.has(value) ? value : undefined;
   const offer: Offer<string> = {
-    present: hasText(value),
+    present: isSet(value),
     valid,
     duplicate: valid !== undefined && local.gender === valid,
     raw: value,
   };
-  const localPresent = hasText(local.gender) || hasPrimitiveElement(local, '_gender');
+  const localPresent = isSet(local.gender) || hasPrimitiveElement(local, '_gender');
   return decide('gender', ['gender'], localPresent, offer, settings, (v) => {
     target.gender = v;
   });
@@ -374,28 +376,30 @@ function mergeList<T extends object>(spec: ListPath<T>, settings: Settings): Cha
     present: spec.incoming.length > 0,
     valid: valid.length > 0 ? valid : undefined,
     duplicate: valid.length > 0 && [...keys].every((key) => localKeys.has(key)),
-    raw: spec.incoming,
+    // Echoed only with includeValues; bounded like the copies.
+    raw: spec.incoming.slice(0, MAX_ENTRIES),
   };
   return decide(spec.path, spec.protectedBy, spec.localPresent, offer, settings, spec.write);
 }
 
 // --- reading and copying untrusted input ---
 
-function hasText(value: unknown): boolean {
-  return typeof value === 'string' && value.trim() !== '';
+/**
+ * Any value counts, whatever its type: fill-empty-only must never replace local data, even data
+ * of the wrong type (a numeric birth date) or a blank string.
+ */
+function isSet(value: unknown): boolean {
+  return value !== undefined && value !== null;
 }
 
 /** `_birthDate` / `_gender`: where FHIR JSON keeps a primitive's extensions. */
 function hasPrimitiveElement(patient: PatientLike, key: string): boolean {
-  const value = (patient as unknown as Record<string, unknown>)[key];
-  return value !== undefined && value !== null;
+  return isSet((patient as unknown as Record<string, unknown>)[key]);
 }
 
 /** Any entry at all counts (fill-empty-only), and a non-array value is data too. */
 function presentArray(value: unknown): boolean {
-  return Array.isArray(value)
-    ? value.some((v) => v !== null && v !== undefined)
-    : value !== undefined && value !== null;
+  return Array.isArray(value) ? value.some(isSet) : isSet(value);
 }
 
 function normalizeIncoming<T>(
