@@ -74,6 +74,12 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Review finding (session 9): boy/girl twins with masculine/feminine names (Daniel/Daniela, Paulo/Paula, JW 0.92-0.98) were auto-matched. Owner decision: `isGenderedPair` (o/e<->a, +a, +ia; names of 3+ letters) makes given and middle pairs a conflict, never fuzzy. Hard case `twins-boy-girl`. `fuzzyMin` stays 0.92 (owner): 0.86 would fix the spelling cases but also accept Lima/Lira.
 - The sensitivity table probes every weight, both thresholds and `fuzzyMin`, scanning all steps (a fix after the first break must still be reported).
 
+## Full-code review before session 10 (owner decisions)
+- Twins with a shared compound first name (Maria Clara / Maria Eduarda) were auto-matched (20 points). A middle-name **conflict** now blocks `match` (counts as insufficient evidence); missing or initial-only middle names still never block. Hard case `twins-compound-first-name`.
+- A custom `normalizePhone` result is unusable when empty, not a string, or its last 8 digits are one repeated digit (the built-in placeholder rule), so equal placeholders never agree whatever hook is plugged in.
+- CI runners pinned to `ubuntu-24.04` (upgrade deliberately).
+- When looking for false matches, think about who shares everything except one field: twins (gendered names, compound first names), parent/child (suffix, date), spouses (name). Each needs a hard case.
+
 ## Untrusted input: bounded work (session 7 review, owner decisions)
 - The incoming record is untrusted, so no input may cause super-linear work without a bound. Measure hostile inputs (long runs, huge arrays) when adding a normalizer or comparator; quadratic code has shipped twice (phone regex, address markers).
 - Names and addresses: duplicates dropped, then at most `MAX_ENTRIES` = 10 per side compared. Jaro-Winkler on at most the first 10 tokens of a name part (set equality uses all) and only on tokens of at most 40 characters (longer: equality only). Worst case for a hostile record ~0.1 s; typical pair ~0.02 ms.

@@ -378,6 +378,14 @@ table('phone', [
     points: 0,
     why: 'a custom normalizer returning an empty string means unusable',
   },
+  {
+    local: { telecom: [phone('(41) 99999-9999')] },
+    incoming: { telecom: [phone('(41) 99999-9999')] },
+    options: { normalizePhone: (v) => `+55${v.replace(/\D/g, '')}` },
+    outcome: 'missing',
+    points: 0,
+    why: 'a placeholder from a custom normalizer is still not agreement',
+  },
 ]);
 
 table('email', [

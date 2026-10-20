@@ -182,7 +182,7 @@ function report(): string {
     '',
     `The default weights and thresholds checked against the [hard-case table](../test/cases/match-cases.ts): **${passed} of ${matchCases.length} cases pass**, ${KNOWN_LIMITATIONS.size} are documented known limitations.`,
     '',
-    'The expected answers were written before any matching code existed (four were added later and are marked in the table: the spelling variants, to document limitations, and boy/girl twins, a false match the session 9 review found and fixed) and are never changed to make a case pass. Points are a heuristic, not a calibrated probability model: they were set by hand against these cases, without real data.',
+    'The expected answers were written before any matching code existed (five were added later and are marked in the table: the spelling variants, to document limitations, and two kinds of twins, false matches that reviews found and fixed) and are never changed to make a case pass. Points are a heuristic, not a calibrated probability model: they were set by hand against these cases, without real data.',
     '',
     '## Defaults',
     '',

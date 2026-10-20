@@ -36,8 +36,7 @@ export function preparePatient(patient: PatientLike, ctx: MatchContext): Prepare
   const telecom = objects(patient.telecom);
   const phones = telecom
     .filter((c) => PHONE_SYSTEMS.has(stringOrEmpty(c.system)))
-    // A custom normalizer returning '' means "unusable" too.
-    .map((c) => (typeof c.value === 'string' ? ctx.phone(c.value) || undefined : undefined));
+    .map((c) => (typeof c.value === 'string' ? ctx.phone(c.value) : undefined));
   const emails = telecom
     .filter((c) => c.system === 'email')
     .map((c) => (typeof c.value === 'string' ? normalizeEmail(c.value) : undefined));

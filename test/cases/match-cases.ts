@@ -380,6 +380,25 @@ export const matchCases: readonly MatchCase[] = [
     why: 'boy/girl twins often get the masculine and feminine forms of one name (no gender recorded here)',
   },
   {
+    // Added in the full-code review before session 10.
+    id: 'twins-compound-first-name',
+    local: patient({
+      name: [name(['Maria', 'Clara'], 'Souza')],
+      birthDate: '2010-05-02',
+      telecom: [phone('(41) 3456-7890')],
+      address: [{ line: ['Rua das Flores 100'], postalCode: '80010-000', country: 'BR' }],
+    }),
+    incoming: patient({
+      name: [name(['Maria', 'Eduarda'], 'Souza')],
+      birthDate: '2010-05-02',
+      telecom: [phone('(41) 3456-7890')],
+      address: [{ line: ['Rua das Flores 100'], postalCode: '80010-000', country: 'BR' }],
+    }),
+    options: BR,
+    expected: ['possible', 'no-match'],
+    why: 'twins often share the first part of a compound first name (Maria Clara, Maria Eduarda)',
+  },
+  {
     id: 'junior-vs-senior',
     local: patient({
       name: [name(['Robert'], 'Miller', 'Jr.')],

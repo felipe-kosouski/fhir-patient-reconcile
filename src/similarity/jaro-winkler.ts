@@ -16,7 +16,8 @@ const BOOST_THRESHOLD = 0.7;
  * digits ending the shared prefix, case and space folding), matching rapidfuzz and Apache.
  *
  * Compares Unicode code points exactly as given: normalize first (see `normalizeText`).
- * Two empty strings are identical (1); one empty string shares nothing (0).
+ * Two empty strings are identical (1); one empty string shares nothing (0). Costs time
+ * proportional to |a| x |b|: bound the length of untrusted input first.
  *
  * @example jaroWinkler('martha', 'marhta') // 0.9611...
  */

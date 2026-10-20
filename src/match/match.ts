@@ -26,7 +26,7 @@ const BEYOND_NAME: readonly MatchField[] = ['birthDate', ...CORROBORATING];
  *   the configured weights allow, clamped to 0..1. It ranks candidates and is not a probability.
  * - `match` needs `points >= thresholds.match`, no veto, and sufficient evidence: given and family
  *   names, birth date, and one of identifier, phone, email or address must all agree (exact or
- *   fuzzy). `possible` needs `points >= thresholds.possible`, no veto, and one agreeing field
+ *   fuzzy), and the middle names must not conflict (twins often share a compound first name). `possible` needs `points >= thresholds.possible`, no veto, and one agreeing field
  *   besides the name (birth date, identifier, phone, email or address): a shared name alone
  *   identifies nobody.
  * - Vetoes (decision `no-match`, grade `certainly-not`): two different trusted identifiers;
@@ -72,8 +72,11 @@ export function matchPatients(
   }
 
   const points = roundPoints(fields.reduce((total, r) => total + r.points, 0));
+  // A middle-name conflict means the given names disagree after the first one: twins often share
+  // a compound first name (Maria Clara / Maria Eduarda). A missing middle name never blocks.
+  const givenAgrees = agrees('given') && outcome('middle') !== 'conflict';
   const insufficientEvidence = !(
-    agrees('given') &&
+    givenAgrees &&
     agrees('family') &&
     agrees('birthDate') &&
     CORROBORATING.some(agrees)

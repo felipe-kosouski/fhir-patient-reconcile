@@ -59,11 +59,11 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | `normalizeText`, `normalizeName` | ✅ done |
 | `normalizePhone` (Brazil + NANP, ninth digit), `normalizeEmail`, placeholder values | ✅ done |
 | `normalizeBirthDate` (partial dates), `normalizeAddress` (CEP/ZIP + street line), `normalizeCpf` | ✅ done |
-| Hard-case table for matching: 44 cases with expected decisions, written before any weights | ✅ done |
+| Hard-case table for matching: 45 cases with expected decisions, written before any weights | ✅ done |
 | `jaroWinkler`, `damerauLevenshtein` (checked against published reference values) | ✅ done |
 | Per-field comparators (outcome, points and a reason without patient values, per field) | ✅ done |
 | `matchPatients` (weights, thresholds, vetoes, minimum evidence, FHIR `match-grade`) | ✅ done |
-| Calibration against the hard-case table: 41 of 44 pass, 3 [known limitations](#known-limitations) ([report](docs/calibration.md)) | ✅ done |
+| Calibration against the hard-case table: 42 of 45 pass, 3 [known limitations](#known-limitations) ([report](docs/calibration.md)) | ✅ done |
 | Property tests for matching (symmetry, determinism, no mutation) and redaction snapshot | 🚧 next |
 | `mergePatient` (fail-closed, change report) | ⏳ planned |
 | npm release `0.1.0` with provenance | ⏳ planned |
@@ -222,7 +222,8 @@ How correctness is checked, not just asserted:
   These already caught a real bug (a doubled generational suffix normalized differently on a
   second pass), and each new property is confirmed by breaking the code on purpose.
 - **Hard cases written before tuning.** The [hard-case table](test/cases/match-cases.ts) holds
-  44 difficult pairs (twins, boy/girl twins named Daniel and Daniela, Jr. vs Sr., Filho vs Neto, married surname, swapped day and month,
+  45 difficult pairs (twins, including boy/girl twins named Daniel and Daniela and twins named
+  Maria Clara and Maria Eduarda, Jr. vs Sr., Filho vs Neto, married surname, swapped day and month,
   placeholder CPFs, newborns registered as "RN de Maria") with the expected decision and a
   one-line reason each. It was written before any matching code existed. The generated
   [calibration report](docs/calibration.md) shows every case's points and decision, and how far

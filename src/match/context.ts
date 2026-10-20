@@ -1,5 +1,6 @@
 import { RNDS_CPF_SYSTEM } from '../normalize/cpf.js';
 import { normalizePhone } from '../normalize/phone.js';
+import { isRepeatedDigits } from '../normalize/placeholders.js';
 import { DEFAULT_NAME_FUZZY_MIN, DEFAULT_THRESHOLDS, DEFAULT_WEIGHTS } from './defaults.js';
 import type {
   FieldOutcome,
@@ -94,8 +95,22 @@ export function resolveContext(options: MatchOptions = {}): MatchContext {
     fuzzyMin,
     includeValues: options.includeValues === true,
     trustedSystems: new Set(trusted),
-    phone: custom ?? ((value) => normalizePhone(value, { defaultCountry })?.e164),
+    phone:
+      custom === undefined
+        ? (value) => normalizePhone(value, { defaultCountry })?.e164
+        : (value) => guardCustomPhone(custom(value)),
   };
+}
+
+/**
+ * The built-in parser rejects placeholders such as (41) 99999-9999; a custom normalizer may not,
+ * and two equal placeholders must never count as agreement. Its result is unusable when empty or
+ * when its last 8 digits are one repeated digit (the built-in rule).
+ */
+function guardCustomPhone(result: string | undefined): string | undefined {
+  if (typeof result !== 'string' || result === '') return undefined;
+  const digits = result.replace(/\D/g, '');
+  return digits.length >= 8 && isRepeatedDigits(digits.slice(-8)) ? undefined : result;
 }
 
 /** `{ exact: undefined }` must not erase a default. */

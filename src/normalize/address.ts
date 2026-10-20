@@ -109,6 +109,9 @@ const US_ABBREVIATIONS: ReadonlyMap<string, string> = new Map(
   }),
 );
 
+/** Unknown country: "Av" and "Dr" mean different things in Brazil and the US, so nothing expands. */
+const NO_ABBREVIATIONS: ReadonlyMap<string, string> = new Map();
+
 /**
  * Brazil: "nº 100", "no. 100", "número 100": markers are dropped before a number. Not used
  * for US addresses, where "N 5th St" means North.
@@ -186,7 +189,7 @@ function normalizeLine(
   const tokens = tokenize(lines.filter((line) => usableText(line) !== undefined).join(' '));
   if (tokens.length === 0) return undefined;
   const abbreviations =
-    country === 'BR' ? BR_ABBREVIATIONS : country === 'US' ? US_ABBREVIATIONS : new Map();
+    country === 'BR' ? BR_ABBREVIATIONS : country === 'US' ? US_ABBREVIATIONS : NO_ABBREVIATIONS;
   const words = (country === 'BR' ? dropNumberMarkers(tokens) : tokens).map(
     (t) => abbreviations.get(t) ?? t,
   );

@@ -6,7 +6,8 @@
  * substring may be edited more than once, so `CA -> AC -> ABC` costs 2, and the distance
  * satisfies the triangle inequality.
  *
- * Compares Unicode code points exactly as given: normalize first (see `normalizeText`).
+ * Compares Unicode code points exactly as given: normalize first (see `normalizeText`). Costs time
+ * and memory proportional to |a| x |b|: bound the length of untrusted input first.
  *
  * @example damerauLevenshtein('maria', 'mraia') // 1 (one adjacent swap)
  */

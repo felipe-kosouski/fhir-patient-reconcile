@@ -49,7 +49,8 @@ export interface MatchOptions {
   /**
    * Replaces the built-in Brazil/NANP phone parser for every phone: returns E.164 (or any
    * canonical string) for a usable number, `undefined` otherwise. Use it for other countries,
-   * e.g. with libphonenumber-js.
+   * e.g. with libphonenumber-js. An empty result, or one whose last 8 digits are one repeated
+   * digit (a placeholder such as 99999-9999), is treated as unusable.
    */
   normalizePhone?: Opt<(value: string) => string | undefined>;
   /**
@@ -106,8 +107,8 @@ export interface MatchResult {
   vetoes: Veto[];
   /**
    * True when given name, family name, birth date and one of identifier, phone, email or address
-   * do not all agree: the decision is then never `match`, whatever the points. (`possible`
-   * separately needs one agreeing field besides the name.)
+   * do not all agree, or the middle names conflict: the decision is then never `match`, whatever
+   * the points. (`possible` separately needs one agreeing field besides the name.)
    */
   insufficientEvidence: boolean;
 }

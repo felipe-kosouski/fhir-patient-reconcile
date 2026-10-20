@@ -79,6 +79,15 @@ describe('decision', () => {
     expect([r.points, r.decision]).toEqual([12, 'possible']);
   });
 
+  it('a middle-name conflict blocks match (twins share compound first names)', () => {
+    const named = (given: string[]) => patient({ ...joao, name: [{ given, family: 'Souza' }] });
+    const twins = matchPatients(named(['Maria', 'Clara']), named(['Maria', 'Eduarda']));
+    expect([twins.decision, twins.insufficientEvidence]).toEqual(['possible', true]);
+    // A missing or initial-only middle name still never blocks.
+    expect(matchPatients(named(['Maria', 'Clara']), named(['Maria'])).decision).toBe('match');
+    expect(matchPatients(named(['Maria', 'Clara']), named(['Maria', 'C.'])).decision).toBe('match');
+  });
+
   it('enough points without a corroborating field is never a match', () => {
     // 21 points from name, date and a heavy name weight, but no identifier/phone/email/address.
     const r = matchPatients(
