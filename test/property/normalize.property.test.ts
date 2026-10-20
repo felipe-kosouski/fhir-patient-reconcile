@@ -1,8 +1,13 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
+  type AddressLike,
   type HumanNameLike,
+  type NormalizedAddress,
   type NormalizedName,
+  normalizeAddress,
+  normalizeBirthDate,
+  normalizeCpf,
   normalizeEmail,
   normalizeName,
   normalizePhone,
@@ -259,6 +264,241 @@ describe('normalizeEmail properties', () => {
         const plain = normalizeEmail(email);
         expect(plain).toBe(email.toLowerCase());
         expect(normalizeEmail(`  ${email.toUpperCase()} `)).toBe(plain);
+      }),
+    );
+  });
+});
+
+// --- birth dates ---
+
+const pad = (n: number, width: number) => String(n).padStart(width, '0');
+
+describe('normalizeBirthDate properties', () => {
+  // Oracle: the JavaScript Date calendar, independent of the hand-written leap-year rule.
+  it('accepts a full date exactly when it exists in the calendar', () => {
+    fc.assert(
+      fc.property(
+        // Biased toward calendar edges (centuries, leap years, month ends) so they are always hit.
+        fc.oneof(
+          fc.integer({ min: 1900, max: 2200 }),
+          fc.constantFrom(1900, 2000, 2023, 2024, 2100, 2200),
+        ),
+        fc.oneof(fc.integer({ min: 0, max: 13 }), fc.constantFrom(2, 4)),
+        fc.oneof(fc.integer({ min: 0, max: 32 }), fc.constantFrom(28, 29, 30, 31)),
+        (year, month, day) => {
+          const value = `${year}-${pad(month, 2)}-${pad(day, 2)}`;
+          const probe = new Date(Date.UTC(year, month - 1, day));
+          const exists =
+            month >= 1 &&
+            day >= 1 &&
+            probe.getUTCMonth() === month - 1 &&
+            probe.getUTCDate() === day &&
+            value !== '1900-01-01';
+          const result = normalizeBirthDate(value);
+          expect(result !== undefined).toBe(exists);
+          if (result !== undefined) {
+            expect([result.year, result.month, result.day]).toEqual([year, month, day]);
+          }
+        },
+      ),
+      // Leap-day edges always run: centuries (1900, 2100 not leap; 2000 leap) and ordinary years.
+      {
+        examples: [
+          [1900, 2, 29],
+          [2000, 2, 29],
+          [2100, 2, 29],
+          [2023, 2, 29],
+          [2024, 2, 29],
+        ],
+      },
+    );
+  });
+
+  it('keeps every truncation of a valid date at its own precision', () => {
+    fc.assert(
+      fc.property(
+        fc.date({
+          min: new Date('1900-01-02T00:00:00Z'),
+          max: new Date('2200-12-31T00:00:00Z'),
+          noInvalidDate: true,
+        }),
+        (date) => {
+          const iso = date.toISOString().slice(0, 10);
+          expect(normalizeBirthDate(iso)?.precision).toBe('day');
+          expect(normalizeBirthDate(iso.slice(0, 7))?.precision).toBe('month');
+          expect(normalizeBirthDate(iso.slice(0, 4))?.precision).toBe('year');
+        },
+      ),
+    );
+  });
+
+  it('is idempotent through its value', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          fc.string(),
+          fc.date({ noInvalidDate: true }).map((d) => d.toISOString().slice(0, 10)),
+        ),
+        (s) => {
+          const once = normalizeBirthDate(s);
+          if (once === undefined) return;
+          expect(normalizeBirthDate(once.value)).toEqual(once);
+        },
+      ),
+    );
+  });
+});
+
+// --- CPF ---
+
+/**
+ * Oracle: the check digit as the Receita Federal rule is usually published
+ * (remainder of the weighted sum by 11; below 2 gives 0, otherwise 11 minus the remainder).
+ * The code under test uses the equivalent (10 x sum mod 11) mod 10 form.
+ */
+function publishedCheckDigit(body: string): number {
+  let sum = 0;
+  for (let i = 0; i < body.length; i++) sum += Number(body[i]) * (body.length + 1 - i);
+  const r = sum % 11;
+  return r < 2 ? 0 : 11 - r;
+}
+const cpfBody = digitString(9, 9).filter(
+  (b) => !repeated(b) && b !== '123456789' && b !== '012345678',
+);
+
+describe('normalizeCpf properties', () => {
+  it('accepts every CPF built with the published rule, with or without formatting', () => {
+    fc.assert(
+      fc.property(cpfBody, fc.boolean(), (body, formatted) => {
+        const d1 = publishedCheckDigit(body);
+        const cpf = `${body}${d1}${publishedCheckDigit(`${body}${d1}`)}`;
+        const input = formatted
+          ? `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`
+          : cpf;
+        expect(normalizeCpf(input)).toBe(cpf);
+      }),
+    );
+  });
+
+  it('accepts exactly one of the 100 possible check-digit pairs for a body', () => {
+    fc.assert(
+      fc.property(cpfBody, (body) => {
+        const accepted = Array.from({ length: 100 }, (_, i) => `${body}${pad(i, 2)}`).filter(
+          (cpf) => normalizeCpf(cpf) !== undefined,
+        );
+        expect(accepted).toHaveLength(1);
+      }),
+    );
+  });
+});
+
+// --- addresses ---
+
+const addressWord = fc.oneof(
+  fc.constantFrom(
+    'R.',
+    'Rua',
+    'Av.',
+    'Dr.',
+    'St',
+    'N',
+    'nº',
+    'no',
+    'Nº',
+    'numero',
+    '100',
+    '5th',
+    'das',
+    'Flores',
+    'N/A',
+    'unknown',
+    'Não',
+    'informado',
+    'S/N',
+    'constructor',
+    'Apto',
+    '#4B',
+    ',',
+  ),
+  fc.string({ unit: 'grapheme', maxLength: 6 }),
+);
+const addressLine = fc.array(addressWord, { maxLength: 6 }).map((w) => w.join(' '));
+const postalCode = fc.oneof(
+  digitString(8, 8).map((d) => `${d.slice(0, 5)}-${d.slice(5)}`),
+  digitString(5, 5),
+  digitString(9, 9),
+  fc.constantFrom('SW1A 2AA', '00000-000', ''),
+  fc.string({ maxLength: 10 }),
+);
+const address: fc.Arbitrary<AddressLike> = fc.record(
+  {
+    line: fc.array(addressLine, { maxLength: 2 }),
+    city: fc.oneof(
+      fc.constantFrom('Curitiba', 'São Paulo', 'Desconhecido'),
+      fc.string({ maxLength: 8 }),
+    ),
+    state: fc.constantFrom('PR', 'Paraná', 'IL', ''),
+    postalCode,
+    country: fc.oneof(
+      fc.constantFrom('BR', 'Brasil', 'US', 'USA', 'GB', ''),
+      fc.string({ maxLength: 4 }),
+    ),
+  },
+  { requiredKeys: [] },
+);
+
+/** Rebuilds an Address from a normalized one. */
+function toAddress(a: NormalizedAddress): AddressLike {
+  return {
+    line: a.line === undefined ? [] : [a.line],
+    city: a.city,
+    state: a.state,
+    postalCode: a.postalCode,
+    country: a.country,
+  };
+}
+
+describe('normalizeAddress properties', () => {
+  it('is a fixed point when the country is known', () => {
+    fc.assert(
+      fc.property(address, (a) => {
+        const once = normalizeAddress(a);
+        if (once?.country === undefined) return;
+        expect(normalizeAddress(toAddress(once))).toEqual(once);
+      }),
+    );
+  });
+
+  it('keeps any CEP or ZIP that is not a placeholder', () => {
+    fc.assert(
+      fc.property(
+        fc.oneof(
+          digitString(8, 8)
+            .filter((d) => !repeated(d) && !d.startsWith('00'))
+            .map((code) => ({ code, country: 'BR' as const, want: code })),
+          digitString(5, 5)
+            .filter((d) => !repeated(d) && !d.startsWith('000'))
+            .map((code) => ({ code, country: 'US' as const, want: code })),
+        ),
+        fc.boolean(),
+        ({ code, country, want }, explicit) => {
+          const result = normalizeAddress({
+            postalCode: code,
+            country: explicit ? country : undefined,
+          });
+          expect(result?.postalCode).toBe(want);
+          expect(result?.country).toBe(country);
+        },
+      ),
+    );
+  });
+
+  it('does not mutate its input', () => {
+    fc.assert(
+      fc.property(address, (a) => {
+        const before = structuredClone(a);
+        normalizeAddress(a);
+        expect(a).toEqual(before);
       }),
     );
   });

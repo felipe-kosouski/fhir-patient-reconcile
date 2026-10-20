@@ -1,4 +1,4 @@
-import { isPlaceholderSubscriber } from './placeholders.js';
+import { isRepeatedDigits } from './placeholders.js';
 
 /** Countries with a built-in phone parser. Others go through a custom normalizer hook. */
 export type PhoneCountry = 'BR' | 'US';
@@ -93,7 +93,7 @@ function parseBR(n: string): NormalizedPhone | undefined {
   const ddd = n.slice(0, 2);
   const subscriber = n.slice(2);
   if (!BR_AREA_CODES.has(ddd)) return undefined;
-  if (isPlaceholderSubscriber(subscriber.slice(-8))) return undefined;
+  if (isRepeatedDigits(subscriber.slice(-8))) return undefined;
 
   if (subscriber.length === 9) {
     if (!subscriber.startsWith('9')) return undefined;
@@ -121,6 +121,6 @@ function parseNANP(n: string): NormalizedPhone | undefined {
   if (!/^[2-9][0-8]\d$/.test(npa) || npa.endsWith('11')) return undefined;
   if (/^8(\d)\1$/.test(npa) || npa === '900') return undefined; // toll-free 8XX, premium 900
   if (!/^[2-9]\d\d$/.test(nxx) || nxx.endsWith('11')) return undefined;
-  if (isPlaceholderSubscriber(n.slice(3))) return undefined;
+  if (isRepeatedDigits(n.slice(3))) return undefined;
   return { e164: `+1${n}`, line: 'unknown', ninthDigitAdded: false };
 }

@@ -55,8 +55,8 @@ export function isPlaceholderFullName(tokens: readonly string[]): boolean {
   return NEWBORN_PREFIXES.some((prefix) => prefix.every((word, i) => words[i] === word));
 }
 
-/** True when the subscriber digits are one repeated digit (99999-9999, 555-5555). */
-export function isPlaceholderSubscriber(digits: string): boolean {
+/** True when the digits are one repeated digit (99999-9999, 000.000.000-00, 00000-000). */
+export function isRepeatedDigits(digits: string): boolean {
   return /^(\d)\1*$/.test(digits);
 }
 
@@ -86,3 +86,25 @@ export function isPlaceholderEmail(local: string, domain: string): boolean {
     PLACEHOLDER_EMAIL_DOMAINS.has(domain)
   );
 }
+
+/** Valid-checksum CPFs typed as fakes: ascending sequences. Repeated digits are checked apart. */
+export const PLACEHOLDER_CPFS: ReadonlySet<string> = new Set(['12345678909', '01234567890']);
+
+/** Whole address lines or cities that mean "unknown", after `normalizeText`. */
+export const PLACEHOLDER_ADDRESS_TEXT: ReadonlySet<string> = new Set([
+  'unknown',
+  'none',
+  'n a',
+  'na',
+  'desconhecido',
+  'ignorado',
+  'nenhum',
+  'nao informado',
+  'nao informada',
+  'sem endereco',
+  'endereco nao informado',
+  's n',
+]);
+
+/** Birth dates that systems use as "unknown". Years before 1900 are rejected separately. */
+export const PLACEHOLDER_BIRTH_DATES: ReadonlySet<string> = new Set(['1900-01-01']);

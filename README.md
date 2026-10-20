@@ -7,8 +7,9 @@
 ![license](https://img.shields.io/badge/license-Apache--2.0-blue)
 
 > [!NOTE]
-> **Work in progress.** The foundations (types, build, CI, name, phone and email normalization) are done.
-> Matching and merging are being built next, and the package is not on npm yet.
+> **Work in progress.** The foundations (types, build, CI, and normalizers for names, phones,
+> emails, birth dates, addresses and CPF) are done. Matching and merging are being built next,
+> and the package is not on npm yet.
 > See [Status](#status) for exactly what works today.
 
 ## The problem
@@ -57,8 +58,9 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | FHIR input types with compatibility tests against `@types/fhir` and Medplum | ✅ done |
 | `normalizeText`, `normalizeName` | ✅ done |
 | `normalizePhone` (Brazil + NANP, ninth digit), `normalizeEmail`, placeholder values | ✅ done |
-| Birth date, address and CPF normalizers | 🚧 next |
-| Jaro-Winkler and Damerau-Levenshtein | ⏳ planned |
+| `normalizeBirthDate` (partial dates), `normalizeAddress` (CEP/ZIP + street line), `normalizeCpf` | ✅ done |
+| Hard-case table for matching: 40 cases with expected decisions, written before any weights | ✅ done |
+| Jaro-Winkler and Damerau-Levenshtein | 🚧 next |
 | `matchPatients` (weights, thresholds, vetoes, FHIR `match-grade`) | ⏳ planned |
 | `mergePatient` (fail-closed, change report) | ⏳ planned |
 | npm release `0.1.0` with provenance | ⏳ planned |
@@ -66,7 +68,14 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 ## What works today
 
 ```ts
-import { normalizeName, normalizePhone, normalizeText } from 'fhir-patient-reconcile';
+import {
+  normalizeAddress,
+  normalizeBirthDate,
+  normalizeCpf,
+  normalizeName,
+  normalizePhone,
+  normalizeText,
+} from 'fhir-patient-reconcile';
 
 normalizeName({ family: 'da Silva Souza Filho', given: ['João Pedro'] });
 // {
@@ -91,6 +100,21 @@ normalizePhone('(415) 555-0123');
 
 normalizeName({ given: ['RN de Maria'], family: 'Souza' });
 // undefined: a newborn placeholder describes the mother, so it counts as missing
+
+normalizeBirthDate('1987-03');
+// { value: '1987-03', precision: 'month', year: 1987, month: 3, day: undefined }
+
+normalizeBirthDate('1900-01-01');
+// undefined: a common "unknown" sentinel, so it counts as missing
+
+normalizeCpf('111.444.777-35');
+// '11144477735' (check digits verified; 000.000.000-00 passes the checksum but is rejected)
+
+normalizeAddress({ line: ['R. das Flores, nº 100'], city: 'Curitiba', postalCode: '80010-000' });
+// { line: 'rua das flores 100', city: 'curitiba', state: undefined, postalCode: '80010000', country: 'BR' }
+
+normalizeAddress({ line: ['123 N Main St.'], postalCode: '62701-1234' });
+// { line: '123 north main street', city: undefined, state: undefined, postalCode: '62701', country: 'US' }
 ```
 
 ## Planned API (v0.1)
@@ -119,9 +143,10 @@ result.changes; // e.g. { path: 'telecom[system=email]', action: 'filled', origi
 How correctness is checked, not just asserted:
 
 - **External oracles.** Type compatibility is checked against the real `@types/fhir` and
-  `@medplum/fhirtypes` packages, not against a copy of their shapes. The upcoming similarity,
-  CPF and phone tests follow the same rule: published Jaro-Winkler reference values, the CPF
-  check-digit algorithm, and Anatel/NANP numbering formats.
+  `@medplum/fhirtypes` packages, not against a copy of their shapes. Phones follow the Anatel and
+  NANP numbering plans; CPF tests use published worked examples and a second, independently
+  written form of the check-digit rule; birth dates are checked against the JavaScript calendar.
+  The upcoming similarity tests use published Jaro-Winkler reference values.
 - **Type tests that are proven to fail.** The type-compatibility suite runs under both
   `exactOptionalPropertyTypes: true` and `false`. Each design rule was broken on purpose
   (index signature, missing `| undefined`, code unions, mutable arrays) to confirm the suite
@@ -129,11 +154,13 @@ How correctness is checked, not just asserted:
 - **Property-based tests** with fast-check: normalizers are idempotent, ignore formatting
   (separators, parentheses, country codes) and never mutate input.
   These already caught a real bug (a doubled generational suffix normalized differently on a
-  second pass).
-- **Hard cases written before tuning.** The matching weights will be calibrated against a table
-  of difficult cases (twins, Jr. vs father, married surname, swapped day and month), each with its
-  expected decision and a one-line reason, written before any weight is tuned. Cases that cannot
-  pass are documented as known limitations instead of having their answers changed.
+  second pass), and each new property is confirmed by breaking the code on purpose.
+- **Hard cases written before tuning.** The [hard-case table](test/cases/match-cases.ts) holds
+  40 difficult pairs (twins, Jr. vs Sr., Filho vs Neto, married surname, swapped day and month,
+  placeholder CPFs, newborns registered as "RN de Maria") with the expected decision and a
+  one-line reason each. It was written before any matching code exists, and the weights will be
+  calibrated against it. Cases that cannot pass are documented as known limitations instead of
+  having their answers changed.
 - **Packaging verified.** `publint --strict` and `@arethetypeswrong/cli` run in CI, and smoke
   tests load the built package through both `import` and `require`.
 - **Synthetic data only.** Invented names, `example.com` emails, fictional phone ranges and

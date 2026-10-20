@@ -29,12 +29,19 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Same CPF + completely different name → `possible` (human review). The merge still refuses, because it requires `match`.
 - The README was pulled forward from session 14 (owner request) and is maintained every session.
 
-## Normalization decisions (sessions 3–4)
+## Normalization decisions (sessions 3–5)
 - Normalizers return `undefined` for anything unusable; **placeholders count as missing**, never as agreement.
 - Names: particles (da, de, do, das, dos, e) dropped only between two names; generational suffixes read from `HumanName.suffix` or trailing family tokens, never from given names; leading titles (Dr., Sra., Mr.) dropped from given names and `text` while another token remains; `text` parsed only without structured parts (first token = given, last = family, `source: 'text'`); placeholders are whole name parts (UNKNOWN, Não Informado) or whole names (RN de…, Bebê de…, Baby Girl…, John Doe, Fulano de Tal). Bebe or Doe alone are real names.
 - Phones: output is `{ e164, line, ninthDigitAdded }` with no country label (+1 is also Canada). An explicit country code (`+` anywhere before the first digit, `00`, `011`) beats `defaultCountry`; service numbers are rejected (BR 0800/0300, NANP toll-free 8XX and 900); labels such as "Cel:" make the value invalid; a number valid in both countries without a default is rejected as ambiguous. Other countries go through the pluggable hook (to be added with `MatchOptions`).
 - Emails: no provider-specific rules (Gmail dots and plus tags are kept). Valid = unquoted RFC 5322 dot-atom local part (Unicode letters allowed) + at least two RFC 1123 host labels, last one containing a letter.
+- Birth dates: FHIR `date` only (`YYYY`, `YYYY-MM`, `YYYY-MM-DD`), kept at their own precision; real calendar days only; date-times and `dd/mm/yyyy` rejected (ambiguous BR/US); years before 1900 and `1900-01-01` are placeholders. No "future date" check (keeps the function pure).
+- Addresses (light): country from `Address.country` or the postal code shape (8 digits = CEP, 5/9 = ZIP); CEP as 8 digits, ZIP compared at 5; street abbreviations expanded only when the country is known (Correios for BR, USPS Pub. 28 for US; "Dr" is Doutor in BR, Drive in US); BR number markers ("nº") dropped before a number; `Address.text` not parsed; placeholders checked before expansion. Lookups use `Map`, never object literals (prototype keys).
+- CPF: 11 digits with `.`/`-`/space separators; check digits verified; repeated digits and ascending sequences (`123.456.789-09`, `012.345.678-90`) are placeholders; lost leading zeros are not restored. RNDS system: `http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf` (from the RNDS CPF profile).
 - Property tests must be able to fail: assert that generated *valid* inputs produce a result, and confirm new properties by breaking the code on purpose.
+
+## Hard-case table
+- `test/cases/match-cases.ts`: expected decision + one-line WHY per case, written in session 5 before any matching code. A list of decisions means "any of these" and is used only where the plan sets a limit (twins: never `match`). `vetoes` lists vetoes that must be present.
+- `test/cases/match-cases.test.ts` checks the table itself (synthetic data, every input parses under the case's options), so a case can only fail on its decision.
 
 ## Non-negotiable invariants
 - **Type compatibility** with `@types/fhir` (R4 and R5) and `@medplum/fhirtypes` is a hard requirement, enforced by type tests in CI under both `exactOptionalPropertyTypes: true` and `false`:
