@@ -11,6 +11,7 @@ import {
   type ContactPointLike,
   type HumanNameLike,
   type IdentifierLike,
+  type MatchResult,
   type PatientLike,
   type PhoneCountry,
   RNDS_CPF_SYSTEM,
@@ -35,6 +36,17 @@ export interface MatchCase {
   /** Vetoes the result must contain (it may contain others). */
   vetoes?: readonly ExpectedVeto[];
   why: string;
+}
+
+/** The expected decision, and every expected veto among the result's vetoes. */
+export function meetsExpectation(
+  c: MatchCase,
+  result: Pick<MatchResult, 'decision' | 'vetoes'>,
+): boolean {
+  const decisions: readonly ExpectedDecision[] =
+    typeof c.expected === 'string' ? [c.expected] : c.expected;
+  const codes = new Set(result.vetoes.map((v) => v.code));
+  return decisions.includes(result.decision) && (c.vetoes ?? []).every((v) => codes.has(v));
 }
 
 // --- builders (keep the table readable) ---
@@ -614,6 +626,55 @@ export const matchCases: readonly MatchCase[] = [
     }),
     expected: 'possible',
     why: 'the newborn record got a real name later; worth review, never an automatic merge',
+  },
+
+  // ---------- spelling variants (added in session 9) ----------
+  // Added after the first calibration to document what the matcher cannot do. The expected
+  // answers are what a person would say, written before any attempt to make them pass.
+  {
+    id: 'family-spelling-variant-z-s',
+    local: patient({
+      name: [name(['Ana'], 'Souza')],
+      birthDate: '1980-06-15',
+      telecom: [phone('(41) 99876-5432')],
+    }),
+    incoming: patient({
+      name: [name(['Ana'], 'Sousa')],
+      birthDate: '1980-06-15',
+      telecom: [phone('(41) 99876-5432')],
+    }),
+    expected: 'match',
+    why: 'Souza and Sousa are two spellings of one family name; date and mobile agree',
+  },
+  {
+    id: 'given-spelling-variant-z-s',
+    local: patient({
+      name: [name(['Luiz'], 'Pereira')],
+      birthDate: '1979-11-02',
+      telecom: [phone('(21) 98765-4321')],
+    }),
+    incoming: patient({
+      name: [name(['Luis'], 'Pereira')],
+      birthDate: '1979-11-02',
+      telecom: [phone('(21) 98765-4321')],
+    }),
+    expected: 'match',
+    why: 'Luiz and Luis are one given name spelled two ways; date and mobile agree',
+  },
+  {
+    id: 'given-spelling-variant-k-c',
+    local: patient({
+      name: [name(['Kátia'], 'Oliveira')],
+      birthDate: '1984-02-17',
+      telecom: [phone('(31) 99876-5432')],
+    }),
+    incoming: patient({
+      name: [name(['Cátia'], 'Oliveira')],
+      birthDate: '1984-02-17',
+      telecom: [phone('(31) 99876-5432')],
+    }),
+    expected: 'match',
+    why: 'Kátia and Cátia are one given name spelled two ways; date and mobile agree',
   },
 
   // ---------- sparse records ----------

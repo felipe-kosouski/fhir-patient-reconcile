@@ -16,6 +16,9 @@ const AGREES: ReadonlySet<FieldOutcome> = new Set(['exact', 'fuzzy']);
 /** Fields that can corroborate name and birth date for a `match`. */
 const CORROBORATING: readonly MatchField[] = ['identifier', 'phone', 'email', 'address'];
 
+/** Fields other than the name that can make a pair worth reviewing. Gender does not score. */
+const BEYOND_NAME: readonly MatchField[] = ['birthDate', ...CORROBORATING];
+
 /**
  * Compares two patients field by field and decides whether they are the same person.
  *
@@ -23,7 +26,9 @@ const CORROBORATING: readonly MatchField[] = ['identifier', 'phone', 'email', 'a
  *   the configured weights allow, clamped to 0..1. It ranks candidates and is not a probability.
  * - `match` needs `points >= thresholds.match`, no veto, and sufficient evidence: given and family
  *   names, birth date, and one of identifier, phone, email or address must all agree (exact or
- *   fuzzy). `possible` needs `points >= thresholds.possible` and no veto.
+ *   fuzzy). `possible` needs `points >= thresholds.possible`, no veto, and one agreeing field
+ *   besides the name (birth date, identifier, phone, email or address): a shared name alone
+ *   identifies nobody.
  * - Vetoes (decision `no-match`, grade `certainly-not`): two different trusted identifiers;
  *   generational suffixes of different generations; birth dates in different years.
  * - An equal trusted identifier always makes the decision at least `possible`, even with a veto:
@@ -77,7 +82,7 @@ export function matchPatients(
   let decision: MatchDecision = 'no-match';
   if (vetoes.length === 0) {
     if (points >= thresholds.match && !insufficientEvidence) decision = 'match';
-    else if (points >= thresholds.possible) decision = 'possible';
+    else if (points >= thresholds.possible && BEYOND_NAME.some(agrees)) decision = 'possible';
   }
   if (decision === 'no-match' && outcome('identifier') === 'exact') decision = 'possible';
 

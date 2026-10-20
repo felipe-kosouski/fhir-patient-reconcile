@@ -62,6 +62,23 @@ describe('decision', () => {
     expect([r.decision, r.matchGrade]).toEqual(['no-match', null]);
   });
 
+  it('a name alone is never possible, however many name parts agree', () => {
+    // given 4 + family 4 + middle 1 = 9 points, above the possible threshold, gender equal too.
+    const fields: Fields = {
+      name: [{ given: ['Maria', 'Aparecida'], family: 'Silva' }],
+      gender: 'female',
+    };
+    const r = matchPatients(patient(fields), patient(fields));
+    expect([r.points, r.decision, r.matchGrade]).toEqual([9, 'no-match', null]);
+  });
+
+  it('a name plus one agreeing field beyond it can be possible', () => {
+    const name = [{ given: ['Maria'], family: 'Silva' }];
+    const telecom = [{ system: 'phone', value: '(11) 98765-4321' }];
+    const r = matchPatients(patient({ name, telecom }), patient({ name, telecom }));
+    expect([r.points, r.decision]).toEqual([12, 'possible']);
+  });
+
   it('enough points without a corroborating field is never a match', () => {
     // 21 points from name, date and a heavy name weight, but no identifier/phone/email/address.
     const r = matchPatients(
@@ -272,9 +289,10 @@ describe('options', () => {
   });
 
   it('compares points with thresholds without floating-point drift (0.7 + 0.1 reaches 0.8)', () => {
-    const name = [{ given: ['Ana'], family: 'Souza' }];
-    const r = matchPatients(patient({ name }), patient({ name }), {
-      weights: { given: { exact: 0.7 }, family: { exact: 0.1 } },
+    // The birth date agrees (possible needs evidence beyond the name) but is weighted 0.
+    const fields = { name: [{ given: ['Ana'], family: 'Souza' }], birthDate: '1980-06-15' };
+    const r = matchPatients(patient(fields), patient(fields), {
+      weights: { given: { exact: 0.7 }, family: { exact: 0.1 }, birthDate: { exact: 0 } },
       thresholds: { match: 10, possible: 0.8 },
     });
     expect([r.points, r.decision]).toEqual([0.8, 'possible']);

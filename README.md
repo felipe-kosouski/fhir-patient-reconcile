@@ -59,11 +59,12 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | `normalizeText`, `normalizeName` | ✅ done |
 | `normalizePhone` (Brazil + NANP, ninth digit), `normalizeEmail`, placeholder values | ✅ done |
 | `normalizeBirthDate` (partial dates), `normalizeAddress` (CEP/ZIP + street line), `normalizeCpf` | ✅ done |
-| Hard-case table for matching: 40 cases with expected decisions, written before any weights | ✅ done |
+| Hard-case table for matching: 43 cases with expected decisions, written before any weights | ✅ done |
 | `jaroWinkler`, `damerauLevenshtein` (checked against published reference values) | ✅ done |
 | Per-field comparators (outcome, points and a reason without patient values, per field) | ✅ done |
-| `matchPatients` (weights, thresholds, vetoes, minimum evidence, FHIR `match-grade`) | ✅ done: 39 of 40 hard cases pass |
-| Calibration against the hard-case table; known limitations documented | 🚧 next |
+| `matchPatients` (weights, thresholds, vetoes, minimum evidence, FHIR `match-grade`) | ✅ done |
+| Calibration against the hard-case table: 40 of 43 pass, 3 [known limitations](#known-limitations) ([report](docs/calibration.md)) | ✅ done |
+| Property tests for matching (symmetry, determinism, no mutation) and redaction snapshot | 🚧 next |
 | `mergePatient` (fail-closed, change report) | ⏳ planned |
 | npm release `0.1.0` with provenance | ⏳ planned |
 
@@ -170,6 +171,19 @@ damerauLevenshtein('CA', 'ABC');
 // 2: CA -> AC -> ABC (unrestricted; "optimal string alignment" would give 3)
 ```
 
+## Known limitations
+
+- **Spelling variants of names.** Names are compared with Jaro-Winkler (cut-off 0.92), so
+  Souza/Sousa (0.907), Luiz/Luis (0.883) and Kátia/Cátia (0.867) count as different names. Such
+  pairs go to human review (`possible`) instead of matching. There is no phonetic matching.
+- **Points are a heuristic.** Weights were set by hand against the hard-case table, not
+  estimated from real data, and `score` is not a probability.
+- **Brazil and the US only** for phones and addresses (other phone formats through
+  `normalizePhone`); name rules are tuned for Portuguese and English names.
+- **Bounded comparison.** At most 10 distinct names and 10 addresses per record are compared.
+
+See the [calibration report](docs/calibration.md) for every case.
+
 ## Planned API (v0.1)
 
 Not implemented yet. This is the target the work above builds toward.
@@ -208,11 +222,12 @@ How correctness is checked, not just asserted:
   These already caught a real bug (a doubled generational suffix normalized differently on a
   second pass), and each new property is confirmed by breaking the code on purpose.
 - **Hard cases written before tuning.** The [hard-case table](test/cases/match-cases.ts) holds
-  40 difficult pairs (twins, Jr. vs Sr., Filho vs Neto, married surname, swapped day and month,
+  43 difficult pairs (twins, Jr. vs Sr., Filho vs Neto, married surname, swapped day and month,
   placeholder CPFs, newborns registered as "RN de Maria") with the expected decision and a
-  one-line reason each. It was written before any matching code exists, and the weights will be
-  calibrated against it. Cases that cannot pass are documented as known limitations instead of
-  having their answers changed.
+  one-line reason each. It was written before any matching code existed. The generated
+  [calibration report](docs/calibration.md) shows every case's points and decision, and how far
+  each weight and threshold can move before a case breaks; CI fails if it is stale. Cases that
+  cannot pass are documented as known limitations instead of having their answers changed.
 - **Bounded work on untrusted input.** The incoming record comes from outside, so every
   normalizer and comparator is measured on hostile input (long runs of spaces, huge arrays).
   A review found and fixed a phone regex with cubic backtracking; best-pair name and address

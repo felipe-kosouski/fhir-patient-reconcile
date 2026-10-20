@@ -190,7 +190,14 @@ describe('matchPatients', () => {
         if (identifier === 'exact') expect(r.decision).not.toBe('no-match');
         if (vetoed && identifier !== 'exact') expect(r.decision).toBe('no-match');
         if (r.decision === 'no-match') expect(r.matchGrade).toBe(vetoed ? 'certainly-not' : null);
-        if (r.decision === 'possible') expect(['probable', 'possible']).toContain(r.matchGrade);
+        if (r.decision === 'possible') {
+          expect(['probable', 'possible']).toContain(r.matchGrade);
+          const beyondName = ['birthDate', 'identifier', 'phone', 'email', 'address'];
+          const agreeing = r.fields.filter(
+            (f) => beyondName.includes(f.field) && (f.outcome === 'exact' || f.outcome === 'fuzzy'),
+          );
+          expect(agreeing.length).toBeGreaterThan(0);
+        }
       }),
     );
   });
