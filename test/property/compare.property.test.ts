@@ -179,7 +179,7 @@ describe('matchPatients', () => {
         const identifier = r.fields.find((f) => f.field === 'identifier')?.outcome;
         const vetoed = r.vetoes.length > 0;
         const points = r.fields.reduce((total, f) => total + f.points, 0);
-        expect(r.points).toBe(points);
+        expect(r.points).toBeCloseTo(points, 9);
         expect(r.score).toBeGreaterThanOrEqual(0);
         expect(r.score).toBeLessThanOrEqual(1);
         if (r.decision === 'match') {
@@ -191,6 +191,69 @@ describe('matchPatients', () => {
         if (vetoed && identifier !== 'exact') expect(r.decision).toBe('no-match');
         if (r.decision === 'no-match') expect(r.matchGrade).toBe(vetoed ? 'certainly-not' : null);
         if (r.decision === 'possible') expect(['probable', 'possible']).toContain(r.matchGrade);
+      }),
+    );
+  });
+});
+
+describe('matchPatients on untrusted JSON', () => {
+  // Records come from outside as JSON. Any field may hold null, a number, an object or an array
+  // where a string is expected; null is even legal inside arrays of primitives in FHIR JSON.
+  const junk = fc.jsonValue({ maxDepth: 2 });
+  const loose = <T>(valid: fc.Arbitrary<T>) => fc.oneof(valid, junk);
+  const looseList = <T>(item: fc.Arbitrary<T>) =>
+    loose(fc.array(fc.oneof(item, junk), { maxLength: 3 }));
+  const looseName = fc.record(
+    {
+      given: looseList(given),
+      family: loose(family),
+      text: loose(fc.constant('João Pedro Souza')),
+      suffix: looseList(fc.constantFrom('Jr.', 'Filho')),
+    },
+    { requiredKeys: [] },
+  );
+  const looseContact = fc.record(
+    {
+      system: loose(fc.constantFrom('phone', 'email')),
+      value: loose(fc.constant('(41) 99876-5432')),
+    },
+    { requiredKeys: [] },
+  );
+  const looseAddress = fc.record(
+    {
+      line: looseList(fc.constant('Rua das Flores 100')),
+      city: junk,
+      postalCode: loose(fc.constant('80010-000')),
+      country: junk,
+    },
+    { requiredKeys: [] },
+  );
+  const untrusted = fc
+    .record(
+      {
+        name: looseList(looseName),
+        telecom: looseList(looseContact),
+        address: looseList(looseAddress),
+        identifier: looseList(
+          fc.record(
+            { system: loose(fc.constant(RNDS_CPF_SYSTEM)), value: junk },
+            { requiredKeys: [] },
+          ),
+        ),
+        birthDate: loose(birthDate),
+        gender: junk,
+      },
+      { requiredKeys: [] },
+    )
+    .map((fields) => ({ resourceType: 'Patient', ...fields }) as unknown as PatientLike);
+
+  it('never throws, and the result stays well-formed', () => {
+    fc.assert(
+      fc.property(untrusted, untrusted, options, (a, b, opts) => {
+        const r = matchPatients(a, b, { ...opts, includeValues: true });
+        expect(['match', 'possible', 'no-match']).toContain(r.decision);
+        expect(Number.isFinite(r.points)).toBe(true);
+        expect(r.fields).toHaveLength(9);
       }),
     );
   });

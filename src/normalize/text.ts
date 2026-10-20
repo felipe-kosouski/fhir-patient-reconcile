@@ -39,3 +39,17 @@ export function tokenize(input: string): string[] {
   const text = normalizeText(input);
   return text === '' ? [] : text.split(' ');
 }
+
+/**
+ * Records arrive as FHIR JSON from outside, so a value typed `string` may hold anything at run
+ * time. `null` is even legal inside arrays of primitives (`"given": ["Jim", null]` when the
+ * parallel `_given` array carries an extension). Anything that is not a string reads as `''`.
+ */
+export function stringOrEmpty(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+/** The strings in `values`; anything else (null entries, a non-array) is dropped. */
+export function strings(values: unknown): string[] {
+  return Array.isArray(values) ? values.filter((v): v is string => typeof v === 'string') : [];
+}

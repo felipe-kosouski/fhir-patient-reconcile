@@ -190,6 +190,15 @@ describe('an equal trusted identifier floors the decision at possible', () => {
     );
     expect([r.decision, r.vetoes.map((v) => v.code)]).toEqual(['possible', ['birthdate-conflict']]);
   });
+
+  it('a vetoed pair lifted to possible is graded possible, never probable', () => {
+    // identifier 10 + family 4 + given 4 - birthDate 6 + phone 4 = 16 points, above the midpoint.
+    const r = matchPatients(
+      patient({ ...joao, identifier: [cpf('222.333.444-05')] }),
+      patient({ ...joao, identifier: [cpf('222.333.444-05')], birthDate: '1962-08-19' }),
+    );
+    expect([r.points, r.decision, r.matchGrade]).toEqual([16, 'possible', 'possible']);
+  });
 });
 
 describe('score', () => {
@@ -231,6 +240,55 @@ describe('options', () => {
     ['a NaN fuzzyMin', { nameSimilarity: { fuzzyMin: Number.NaN } }],
   ])('rejects %s with a RangeError', (_, options) => {
     expect(() => matchPatients(patient(joao), patient(joao), options)).toThrow(RangeError);
+  });
+
+  // Untyped callers (JSON config, environment variables) bypass the types, so these are cast.
+  const untyped = (options: object) => options as MatchOptions;
+
+  it.each<[string, object]>([
+    ['a misspelled field', { weights: { birthdate: { exact: 9 } } }],
+    ['a misspelled outcome', { weights: { given: { exakt: 9 } } }],
+    ['a misspelled threshold', { thresholds: { mtch: 9 } }],
+    ['a misspelled top-level option', { defaultCountyr: 'BR' }],
+    ['a misspelled nested option', { nameSimilarity: { fuzzymin: 0.9 } }],
+    ['an unsupported defaultCountry', { defaultCountry: 'br' }],
+    ['a string fuzzyMin', { nameSimilarity: { fuzzyMin: '0.9' } }],
+  ])('rejects %s with a RangeError instead of ignoring it', (_, options) => {
+    expect(() => matchPatients(patient(joao), patient(joao), untyped(options))).toThrow(RangeError);
+  });
+
+  it.each<[string, object]>([
+    ['trusted systems given as a string', { identifierSystems: { trusted: 'urn:example:mrn' } }],
+    ['a normalizePhone that is not a function', { normalizePhone: 'libphonenumber' }],
+  ])('rejects %s with a TypeError, even when no field would use it', (_, options) => {
+    expect(() => matchPatients(patient({}), patient({}), untyped(options))).toThrow(TypeError);
+  });
+
+  it('adds patient values only for includeValues === true (a truthy string must not leak PHI)', () => {
+    for (const includeValues of ['false', 'true', 1]) {
+      const r = matchPatients(patient(joao), patient(joao), untyped({ includeValues }));
+      expect(r.fields.some((f) => 'local' in f || 'incoming' in f)).toBe(false);
+    }
+  });
+
+  it('compares points with thresholds without floating-point drift (0.7 + 0.1 reaches 0.8)', () => {
+    const name = [{ given: ['Ana'], family: 'Souza' }];
+    const r = matchPatients(patient({ name }), patient({ name }), {
+      weights: { given: { exact: 0.7 }, family: { exact: 0.1 } },
+      thresholds: { match: 10, possible: 0.8 },
+    });
+    expect([r.points, r.decision]).toEqual([0.8, 'possible']);
+  });
+
+  it('the exported defaults are frozen, so one caller cannot change everyone’s results', () => {
+    const weights = DEFAULT_WEIGHTS as { given: { exact: number } };
+    expect(() => {
+      weights.given.exact = 100;
+    }).toThrow(TypeError);
+    expect(() => {
+      (DEFAULT_THRESHOLDS as { match: number }).match = 1;
+    }).toThrow(TypeError);
+    expect(matchPatients(patient(joao), patient(joao)).points).toBe(17);
   });
 
   it('accepts explicit undefined everywhere (exactOptionalPropertyTypes callers)', () => {

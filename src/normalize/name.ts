@@ -1,6 +1,6 @@
 import type { HumanNameLike } from '../types/fhir.js';
 import { isPlaceholderFullName, isPlaceholderNamePart, PARTICLES } from './placeholders.js';
-import { tokenize } from './text.js';
+import { stringOrEmpty, strings, tokenize } from './text.js';
 
 /** Canonical generational suffixes. Jr./Júnior map to `junior`, Sr. to `senior`. */
 export type GenerationalSuffix =
@@ -79,18 +79,18 @@ const TITLES: ReadonlySet<string> = new Set([
  * Returns `undefined` when nothing usable remains.
  */
 export function normalizeName(name: HumanNameLike): NormalizedName | undefined {
-  const given = (name.given ?? []).flatMap(tokenize);
-  const family = tokenize(name.family ?? '');
+  const given = strings(name.given).flatMap(tokenize);
+  const family = tokenize(stringOrEmpty(name.family));
   if (given.length > 0 || family.length > 0) {
     const stripped = stripTrailingSuffixes(family, 1);
     return build(
       stripLeadingTitles(given),
       stripped.rest,
-      suffixFromField(name.suffix ?? []) ?? stripped.suffix,
+      suffixFromField(strings(name.suffix)) ?? stripped.suffix,
       'parts',
     );
   }
-  return fromText(tokenize(name.text ?? ''));
+  return fromText(tokenize(stringOrEmpty(name.text)));
 }
 
 /** Text has no structure: first token = given, last token = family, the rest = middle. */

@@ -3,6 +3,7 @@ import { normalizeCpf, RNDS_CPF_SYSTEM } from '../normalize/cpf.js';
 import { type NormalizedBirthDate, normalizeBirthDate } from '../normalize/date.js';
 import { normalizeEmail } from '../normalize/email.js';
 import { type NormalizedName, normalizeName } from '../normalize/name.js';
+import { stringOrEmpty } from '../normalize/text.js';
 import type { PatientLike } from '../types/fhir.js';
 import type { MatchContext } from './context.js';
 
@@ -32,18 +33,19 @@ export const MAX_ENTRIES = 10;
 const PHONE_SYSTEMS: ReadonlySet<string> = new Set(['phone', 'sms']);
 
 export function preparePatient(patient: PatientLike, ctx: MatchContext): PreparedPatient {
-  const telecom = patient.telecom ?? [];
+  const telecom = objects(patient.telecom);
   const phones = telecom
-    .filter((c) => PHONE_SYSTEMS.has(c.system ?? ''))
+    .filter((c) => PHONE_SYSTEMS.has(stringOrEmpty(c.system)))
     // A custom normalizer returning '' means "unusable" too.
-    .map((c) => (c.value === undefined ? undefined : ctx.phone(c.value) || undefined));
+    .map((c) => (typeof c.value === 'string' ? ctx.phone(c.value) || undefined : undefined));
   const emails = telecom
     .filter((c) => c.system === 'email')
-    .map((c) => (c.value === undefined ? undefined : normalizeEmail(c.value)));
+    .map((c) => (typeof c.value === 'string' ? normalizeEmail(c.value) : undefined));
 
   const identifiers = new Map<string, Set<string>>();
-  for (const { system, value } of patient.identifier ?? []) {
-    if (system === undefined || value === undefined || !ctx.trustedSystems.has(system)) continue;
+  for (const { system, value } of objects(patient.identifier)) {
+    if (typeof system !== 'string' || typeof value !== 'string') continue;
+    if (!ctx.trustedSystems.has(system)) continue;
     const normalized = normalizeIdentifier(system, value);
     if (normalized === undefined) continue;
     const values = identifiers.get(system) ?? new Set();
@@ -52,16 +54,20 @@ export function preparePatient(patient: PatientLike, ctx: MatchContext): Prepare
   }
 
   return {
-    names: distinct(defined((patient.name ?? []).map(normalizeName))).slice(0, MAX_ENTRIES),
-    birthDate: patient.birthDate === undefined ? undefined : normalizeBirthDate(patient.birthDate),
+    names: distinct(defined(objects(patient.name).map(normalizeName))).slice(0, MAX_ENTRIES),
+    birthDate:
+      typeof patient.birthDate === 'string' ? normalizeBirthDate(patient.birthDate) : undefined,
     phones: new Set(defined(phones)),
     emails: new Set(defined(emails)),
-    addresses: distinct(defined((patient.address ?? []).map(normalizeAddress))).slice(
+    addresses: distinct(defined(objects(patient.address).map(normalizeAddress))).slice(
       0,
       MAX_ENTRIES,
     ),
     identifiers,
-    gender: patient.gender === 'unknown' ? undefined : patient.gender,
+    gender:
+      typeof patient.gender === 'string' && patient.gender !== 'unknown'
+        ? patient.gender
+        : undefined,
   };
 }
 
@@ -70,6 +76,16 @@ function normalizeIdentifier(system: string, value: string): string | undefined 
   if (system === RNDS_CPF_SYSTEM) return normalizeCpf(value);
   const trimmed = value.normalize('NFKC').trim();
   return trimmed === '' ? undefined : trimmed;
+}
+
+/**
+ * The object entries of a FHIR array. Records come from outside, so a `null` entry or a
+ * non-array value reads as missing instead of throwing.
+ */
+function objects<T extends object>(values: readonly T[] | undefined): T[] {
+  return Array.isArray(values)
+    ? values.filter((v): v is T => typeof v === 'object' && v !== null)
+    : [];
 }
 
 function defined<T>(values: readonly (T | undefined)[]): T[] {

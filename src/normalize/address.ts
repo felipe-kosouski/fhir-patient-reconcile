@@ -1,6 +1,6 @@
 import type { AddressLike } from '../types/fhir.js';
 import { isRepeatedDigits, PLACEHOLDER_ADDRESS_TEXT } from './placeholders.js';
-import { normalizeText, tokenize } from './text.js';
+import { normalizeText, stringOrEmpty, strings, tokenize } from './text.js';
 
 /** Countries whose postal codes and street abbreviations are understood. */
 export type AddressCountry = 'BR' | 'US';
@@ -128,12 +128,12 @@ const NUMBER_MARKERS: ReadonlySet<string> = new Set(['n', 'no', 'nro', 'num', 'n
  * Returns `undefined` when no line, city or postal code is usable.
  */
 export function normalizeAddress(address: AddressLike): NormalizedAddress | undefined {
-  const explicit = parseCountry(address.country);
-  const postal = parsePostalCode(address.postalCode, explicit);
+  const explicit = parseCountry(stringOrEmpty(address.country));
+  const postal = parsePostalCode(stringOrEmpty(address.postalCode), explicit);
   const country = explicit === 'other' ? undefined : (explicit ?? postal.country);
 
   const result: NormalizedAddress = {
-    line: normalizeLine(address.line ?? [], country),
+    line: normalizeLine(strings(address.line), country),
     city: usableText(address.city),
     state: usableText(address.state),
     postalCode: postal.code,
@@ -145,18 +145,18 @@ export function normalizeAddress(address: AddressLike): NormalizedAddress | unde
   return result;
 }
 
-function parseCountry(value: string | undefined): AddressCountry | 'other' | undefined {
-  const text = normalizeText(value ?? '');
+function parseCountry(value: string): AddressCountry | 'other' | undefined {
+  const text = normalizeText(value);
   if (text === '') return undefined;
   return COUNTRY_NAMES.get(text) ?? 'other';
 }
 
 function parsePostalCode(
-  value: string | undefined,
+  value: string,
   country: AddressCountry | 'other' | undefined,
 ): { code: string | undefined; country: AddressCountry | undefined } {
   const none = { code: undefined, country: undefined };
-  if (value === undefined) return none;
+  if (value === '') return none;
   const compact = value.normalize('NFKC').replace(/[\s.]/g, '');
   const isCep = /^\d{5}-?\d{3}$/.test(compact);
   const isZip = /^\d{5}(?:-?\d{4})?$/.test(compact);
@@ -211,7 +211,7 @@ function dropNumberMarkers(tokens: readonly string[]): string[] {
   return kept.reverse();
 }
 
-function usableText(value: string | undefined): string | undefined {
-  const text = normalizeText(value ?? '');
+function usableText(value: unknown): string | undefined {
+  const text = normalizeText(stringOrEmpty(value));
   return text === '' || PLACEHOLDER_ADDRESS_TEXT.has(text) ? undefined : text;
 }

@@ -231,3 +231,17 @@ describe('normalizeName', () => {
     expect(normalizeName(name)).toEqual(expected);
   });
 });
+
+describe('normalizeName on FHIR JSON', () => {
+  it('skips null entries, which FHIR JSON allows in arrays of primitives', () => {
+    // `"given": ["Jim", null], "_given": [null, { "extension": [...] }]` is valid FHIR JSON.
+    const name = JSON.parse('{"given": ["Jim", null], "family": "Smith", "suffix": [null, "Jr."]}');
+    expect(normalizeName(name)).toEqual({
+      given: 'jim',
+      middle: [],
+      family: ['smith'],
+      suffix: 'junior',
+      source: 'parts',
+    });
+  });
+});

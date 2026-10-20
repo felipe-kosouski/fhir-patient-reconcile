@@ -72,10 +72,9 @@ export function compareNames(
       if (all.every((r) => r.outcome === 'missing')) continue;
       const points = all.reduce((sum, r) => sum + r.points, 0);
       const suffixConflict = suffixesConflict(a.name, b.name);
-      const better =
-        points > bestPoints ||
-        (points === bestPoints && suffixConflict && best?.suffixConflict === false);
-      if (better) {
+      const breaksTie =
+        points === bestPoints && suffixConflict && best !== undefined && !best.suffixConflict;
+      if (points > bestPoints || breaksTie) {
         best = { ...results, suffixConflict };
         bestPoints = points;
       }

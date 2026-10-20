@@ -177,3 +177,10 @@ describe('normalizeAddress on hostile input', () => {
     expect(normalizeAddress({ line: [line], country: 'BR' })?.line).toBe('5');
   });
 });
+
+describe('normalizeAddress on FHIR JSON', () => {
+  it('skips null line entries and reads a null postal code as missing', () => {
+    const address = JSON.parse('{"line": [null, "Rua A 10"], "postalCode": null, "country": "BR"}');
+    expect(normalizeAddress(address)).toEqual({ ...empty, line: 'rua a 10', country: 'BR' });
+  });
+});

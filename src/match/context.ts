@@ -4,12 +4,22 @@ import { DEFAULT_NAME_FUZZY_MIN, DEFAULT_THRESHOLDS, DEFAULT_WEIGHTS } from './d
 import type {
   FieldOutcome,
   FieldResult,
-  FieldWeightOverrides,
   FieldWeights,
   MatchField,
   MatchOptions,
   MatchThresholds,
 } from './types.js';
+
+/** Every `MatchOptions` key, so a typo (`defaultCountyr`) fails instead of being ignored. */
+const KNOWN_OPTIONS: Readonly<Record<keyof MatchOptions, true>> = {
+  weights: true,
+  thresholds: true,
+  defaultCountry: true,
+  normalizePhone: true,
+  identifierSystems: true,
+  nameSimilarity: true,
+  includeValues: true,
+};
 
 /** Options resolved once per comparison. */
 export interface MatchContext {
@@ -22,30 +32,36 @@ export interface MatchContext {
 }
 
 /**
- * Resolves and validates the options. A configuration mistake (NaN weight, cut-off outside
- * 0..1, `possible` above `match`) throws a RangeError instead of silently producing NaN points.
+ * Resolves and validates the options once per call. Configuration mistakes fail loudly instead
+ * of silently changing results:
+ * - RangeError: a non-finite weight or threshold, `fuzzyMin` outside 0..1, `possible` above
+ *   `match`, an unknown option, field, outcome or threshold name (a typo such as `birthdate`), or a
+ *   `defaultCountry` other than `BR` or `US`;
+ * - TypeError: `identifierSystems.trusted` that is not an array of strings, or a
+ *   `normalizePhone` that is not a function.
+ *
+ * `includeValues` must be exactly `true` to add patient values: a truthy string from an untyped
+ * configuration (`'false'`) must not leak PHI.
  */
 export function resolveContext(options: MatchOptions = {}): MatchContext {
+  requireKnownKeys(options, KNOWN_OPTIONS, 'options');
+  requireKnownKeys(options.nameSimilarity ?? {}, { fuzzyMin: true }, 'nameSimilarity');
+  requireKnownKeys(options.identifierSystems ?? {}, { trusted: true }, 'identifierSystems');
   const overrides = options.weights ?? {};
-  const weights = Object.fromEntries(
-    (Object.keys(DEFAULT_WEIGHTS) as MatchField[]).map((field) => [
-      field,
-      {
-        ...DEFAULT_WEIGHTS[field],
-        ...withoutUndefined<FieldWeightOverrides>(overrides[field] ?? {}),
-      },
-    ]),
-  ) as Record<MatchField, FieldWeights>;
-
-  for (const [field, w] of Object.entries(weights)) {
-    for (const [outcome, value] of Object.entries(w)) {
+  requireKnownKeys(overrides, DEFAULT_WEIGHTS, 'weights');
+  const weights = {} as Record<MatchField, FieldWeights>;
+  for (const field of Object.keys(DEFAULT_WEIGHTS) as MatchField[]) {
+    const override = overrides[field] ?? {};
+    requireKnownKeys(override, DEFAULT_WEIGHTS[field], `weights.${field}`);
+    weights[field] = { ...DEFAULT_WEIGHTS[field], ...withoutUndefined(override) };
+    for (const [outcome, value] of Object.entries(weights[field])) {
       requireFinite(value, `weights.${field}.${outcome}`);
     }
   }
-  const thresholds = {
-    ...DEFAULT_THRESHOLDS,
-    ...withoutUndefined(options.thresholds ?? {}),
-  } as MatchThresholds;
+
+  const thresholdOverrides = options.thresholds ?? {};
+  requireKnownKeys(thresholdOverrides, DEFAULT_THRESHOLDS, 'thresholds');
+  const thresholds = { ...DEFAULT_THRESHOLDS, ...withoutUndefined(thresholdOverrides) };
   requireFinite(thresholds.match, 'thresholds.match');
   requireFinite(thresholds.possible, 'thresholds.possible');
   if (thresholds.possible > thresholds.match) {
@@ -53,27 +69,52 @@ export function resolveContext(options: MatchOptions = {}): MatchContext {
       `thresholds.possible (${thresholds.possible}) must not exceed thresholds.match (${thresholds.match})`,
     );
   }
+
   const fuzzyMin = options.nameSimilarity?.fuzzyMin ?? DEFAULT_NAME_FUZZY_MIN;
-  if (!(fuzzyMin >= 0 && fuzzyMin <= 1)) {
+  requireFinite(fuzzyMin, 'nameSimilarity.fuzzyMin');
+  if (fuzzyMin < 0 || fuzzyMin > 1) {
     throw new RangeError(`nameSimilarity.fuzzyMin must be between 0 and 1, got ${fuzzyMin}`);
   }
 
   const { defaultCountry, normalizePhone: custom } = options;
+  if (defaultCountry !== undefined && defaultCountry !== 'BR' && defaultCountry !== 'US') {
+    throw new RangeError(`defaultCountry must be 'BR' or 'US', got ${String(defaultCountry)}`);
+  }
+  if (custom !== undefined && typeof custom !== 'function') {
+    throw new TypeError('normalizePhone must be a function');
+  }
+  const trusted = options.identifierSystems?.trusted ?? [RNDS_CPF_SYSTEM];
+  if (!Array.isArray(trusted) || !trusted.every((system) => typeof system === 'string')) {
+    throw new TypeError('identifierSystems.trusted must be an array of strings');
+  }
+
   return {
     weights,
     thresholds,
     fuzzyMin,
-    includeValues: options.includeValues ?? false,
-    trustedSystems: new Set(options.identifierSystems?.trusted ?? [RNDS_CPF_SYSTEM]),
+    includeValues: options.includeValues === true,
+    trustedSystems: new Set(trusted),
     phone: custom ?? ((value) => normalizePhone(value, { defaultCountry })?.e164),
   };
 }
 
 /** `{ exact: undefined }` must not erase a default. */
-function withoutUndefined<T extends object>(values: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(values).filter(([, v]) => v !== undefined),
-  ) as Partial<T>;
+function withoutUndefined<T extends object>(
+  values: T,
+): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  return Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined)) as {
+    [K in keyof T]?: Exclude<T[K], undefined>;
+  };
+}
+
+function requireKnownKeys(values: object, known: object, name: string): void {
+  for (const key of Object.keys(values)) {
+    if (!Object.hasOwn(known, key)) {
+      const allowed = Object.keys(known).join(', ');
+      const path = name === 'options' ? key : `${name}.${key}`;
+      throw new RangeError(`unknown option ${path} (expected one of: ${allowed})`);
+    }
+  }
 }
 
 function requireFinite(value: unknown, name: string): void {

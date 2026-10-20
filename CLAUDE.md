@@ -60,7 +60,10 @@ These planning files are local-only (git-ignored, not in the public repo).
   - Suffix veto when the chosen name pair has different generations; **Júnior and Filho are the same generation** (both = son with the father's exact name; vLex "Nome da pessoa natural", Crátilo 2019) and never conflict. On a tie between name pairs, the conflicting pair wins (keeps the veto symmetric).
   - Minimum evidence for `match` = agreement (exact or fuzzy) of given AND family, birth date, and one of identifier/phone/email/address.
   - An exact trusted identifier floors the decision at `possible`, even with a veto (owner decision 4 generalized).
-  - Invalid options throw `RangeError` (non-finite weights/thresholds, `fuzzyMin` outside 0..1, possible > match).
+  - Invalid options throw `RangeError` (non-finite weights/thresholds, `fuzzyMin` outside 0..1, possible > match, unknown option/field/outcome/threshold names, `defaultCountry` not BR/US) or `TypeError` (wrong types). Typos must never be ignored silently.
+  - A vetoed pair lifted to `possible` by an equal identifier is graded `possible`, never `probable` (review, session 8).
+- Review hardening (session 8): `includeValues` must be exactly `true` (a truthy string must not leak PHI); `DEFAULT_WEIGHTS`/`DEFAULT_THRESHOLDS` are frozen; points are rounded to 9 decimals before threshold comparisons (0.7 + 0.1 must reach 0.8).
+- Input is untrusted FHIR JSON: anything that is not the expected type (null, numbers, objects) reads as missing, never throws. `null` inside arrays of primitives (`"given": ["Jim", null]`) is legal FHIR. Use `stringOrEmpty`/`strings` (normalize/text.ts) and `objects` (match/prepare.ts) when reading input; a property test feeds `fc.jsonValue()` into every field.
 - Hard cases run in `test/cases/match-cases.match.test.ts`; failures go in `PENDING_CALIBRATION` with `it.fails` (turns red once fixed). Pending after session 8: `name-only` (8 points = possible threshold).
 
 ## Untrusted input: bounded work (session 7 review, owner decisions)

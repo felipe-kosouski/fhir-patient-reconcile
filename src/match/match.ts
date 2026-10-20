@@ -3,7 +3,6 @@ import { compareFields } from './compare/index.js';
 import type {
   FhirMatchGrade,
   FieldOutcome,
-  FieldResult,
   MatchDecision,
   MatchField,
   MatchOptions,
@@ -28,7 +27,7 @@ const CORROBORATING: readonly MatchField[] = ['identifier', 'phone', 'email', 'a
  * - Vetoes (decision `no-match`, grade `certainly-not`): two different trusted identifiers;
  *   generational suffixes of different generations; birth dates in different years.
  * - An equal trusted identifier always makes the decision at least `possible`, even with a veto:
- *   a shared CPF between two records needs a human look.
+ *   a shared CPF between two records needs a human look. With a veto, the grade is `possible`.
  * - `matchGrade` follows the FHIR `match-grade` vocabulary: `match` is `certain`; `possible` at
  *   or above the midpoint between the thresholds is `probable`, below it `possible`; `no-match`
  *   with a veto is `certainly-not`, without one `null` (`$match` would not return it).
@@ -36,8 +35,9 @@ const CORROBORATING: readonly MatchField[] = ['identifier', 'phone', 'email', 'a
  * Symmetric: swapping `local` and `incoming` gives the same decision, points and vetoes. Inputs
  * are never mutated, and explanations hold no patient values unless `includeValues` is set.
  *
- * @throws RangeError for invalid options (non-finite weights or thresholds, `fuzzyMin` outside
- * 0..1, `thresholds.possible` above `thresholds.match`).
+ * @throws RangeError or TypeError for invalid options: non-finite weights or thresholds,
+ * `fuzzyMin` outside 0..1, `thresholds.possible` above `thresholds.match`, unknown option names,
+ * an unsupported `defaultCountry`, or options of the wrong type.
  */
 export function matchPatients(
   local: PatientLike,
@@ -45,8 +45,9 @@ export function matchPatients(
   options?: MatchOptions,
 ): MatchResult {
   const { fields, suffixConflict, birthYearsDiffer, ctx } = compareFields(local, incoming, options);
-  const outcome = (field: MatchField) => fields.find((r) => r.field === field)?.outcome;
-  const agrees = (field: MatchField) => AGREES.has(outcome(field) ?? 'missing');
+  const outcomes = new Map(fields.map((r) => [r.field, r.outcome]));
+  const outcome = (field: MatchField): FieldOutcome => outcomes.get(field) ?? 'missing';
+  const agrees = (field: MatchField) => AGREES.has(outcome(field));
 
   const vetoes: Veto[] = [];
   if (outcome('identifier') === 'conflict') {
@@ -65,7 +66,7 @@ export function matchPatients(
     vetoes.push({ code: 'birthdate-conflict', reason: 'birth dates are in different years' });
   }
 
-  const points = sum(fields);
+  const points = roundPoints(fields.reduce((total, r) => total + r.points, 0));
   const insufficientEvidence = !(
     agrees('given') &&
     agrees('family') &&
@@ -104,13 +105,20 @@ function grade(
 ): FhirMatchGrade | null {
   if (decision === 'match') return 'certain';
   if (decision === 'possible') {
+    // A vetoed pair is only here because an equal identifier lifted it: it needs review, and
+    // 'probable' would contradict the veto.
+    if (vetoed) return 'possible';
     return points >= (thresholds.match + thresholds.possible) / 2 ? 'probable' : 'possible';
   }
   return vetoed ? 'certainly-not' : null;
 }
 
-function sum(fields: readonly FieldResult[]): number {
-  return fields.reduce((total, r) => total + r.points, 0);
+/**
+ * Weights like 0.7 + 0.1 add up to 0.7999999999999999 in floating point, which would miss a
+ * threshold of 0.8. Points are rounded to 9 decimals, far below any meaningful weight.
+ */
+function roundPoints(points: number): number {
+  return Math.round(points * 1e9) / 1e9;
 }
 
 function clamp(value: number): number {
