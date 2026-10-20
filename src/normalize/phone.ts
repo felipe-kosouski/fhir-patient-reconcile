@@ -27,6 +27,12 @@ const BR_AREA_CODES: ReadonlySet<string> = new Set(
 );
 
 /**
+ * Longest value accepted, after trimming. A number with a label and an extension stays under
+ * ~40 characters.
+ */
+const MAX_PHONE_LENGTH = 64;
+
+/**
  * Normalizes a Brazilian or NANP (US/Canada) phone number.
  *
  * An explicit country code (`+55`, `+1`, `00…`, `011…`) wins over `defaultCountry`. Without
@@ -34,18 +40,22 @@ const BR_AREA_CODES: ReadonlySet<string> = new Set(
  *
  * Returns `undefined` for invalid numbers, numbers from other countries, service numbers
  * (Brazilian 0800/0300, NANP toll-free 8XX and 900), letters (including labels such as "Cel:"),
- * numbers without an area code, and placeholders (one repeated digit).
+ * numbers without an area code, placeholders (one repeated digit) and values longer than 64
+ * characters after trimming.
  */
 export function normalizePhone(
   value: string,
   options: NormalizePhoneOptions = {},
 ): NormalizedPhone | undefined {
-  const cleaned = value
-    .normalize('NFKC')
-    .trim()
+  const trimmed = value.normalize('NFKC').trim();
+  // Incoming records are untrusted: bound the input before any regex runs on it.
+  if (trimmed.length > MAX_PHONE_LENGTH) return undefined;
+  const cleaned = trimmed
     .replace(/^tel:/i, '')
-    // Extensions: "x204", "ramal 22", RFC 3966 ";ext=204".
-    .replace(/\s*;?\s*(?:ext\.?|extension|ramal|x|r\.)\s*[=:.]?\s*\d+\s*$/i, '');
+    // Extensions: "x204", "ramal 22", RFC 3966 ";ext=204". Each whitespace run has one way to
+    // match (the old `\s*;?\s*` had many: cubic, ~0.5 s on 1,000 spaces). Still quadratic in
+    // the worst case, which the length bound above keeps negligible.
+    .replace(/\s*(?:;\s*)?(?:ext\.?|extension|ramal|x|r\.)\s*(?:[=:.]\s*)?\d+\s*$/i, '');
   if (/\p{L}/u.test(cleaned)) return undefined;
 
   const digits = cleaned.replace(/\D/g, '');

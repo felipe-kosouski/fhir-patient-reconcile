@@ -169,3 +169,11 @@ describe('normalizeAddress', () => {
     );
   });
 });
+
+describe('normalizeAddress on hostile input', () => {
+  // A run of number markers used to be rescanned from every marker: 100k tokens took ~30 s.
+  it('drops number markers in linear time', { timeout: 2000 }, () => {
+    const line = `${'no '.repeat(100_000)}5`;
+    expect(normalizeAddress({ line: [line], country: 'BR' })?.line).toBe('5');
+  });
+});

@@ -43,19 +43,22 @@ function withoutUndefined(weights: FieldWeightOverrides): Partial<FieldWeights> 
   return Object.fromEntries(Object.entries(weights).filter(([, v]) => v !== undefined));
 }
 
-export interface ResultDetails {
+export interface ResultValues {
   local?: string | undefined;
   incoming?: string | undefined;
-  similarity?: number | undefined;
 }
 
-/** Builds a FieldResult: points from the weights, values only with `includeValues`. */
+/**
+ * Builds a FieldResult: points from the weights, values only with `includeValues`. Values come
+ * from a function so they are only built (joined, formatted) when they will be reported.
+ */
 export function fieldResult(
   ctx: MatchContext,
   field: MatchField,
   outcome: FieldOutcome,
   reason: string,
-  details: ResultDetails = {},
+  values?: () => ResultValues,
+  similarity?: number,
 ): FieldResult {
   const result: FieldResult = {
     field,
@@ -63,10 +66,11 @@ export function fieldResult(
     points: outcome === 'missing' ? 0 : ctx.weights[field][outcome],
     reason,
   };
-  if (details.similarity !== undefined) result.similarity = details.similarity;
-  if (ctx.includeValues) {
-    if (details.local !== undefined) result.local = details.local;
-    if (details.incoming !== undefined) result.incoming = details.incoming;
+  if (similarity !== undefined) result.similarity = similarity;
+  if (ctx.includeValues && values !== undefined) {
+    const { local, incoming } = values();
+    if (local !== undefined) result.local = local;
+    if (incoming !== undefined) result.incoming = incoming;
   }
   return result;
 }

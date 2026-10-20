@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type PatientLike, RNDS_CPF_SYSTEM } from '../../../src/index.js';
+import { type HumanNameLike, type PatientLike, RNDS_CPF_SYSTEM } from '../../../src/index.js';
 import { compareFields } from '../../../src/match/compare/index.js';
 import type { FieldOutcome, MatchField, MatchOptions } from '../../../src/match/types.js';
 
@@ -603,6 +603,76 @@ describe('name pairs', () => {
   it('reports the Jaro-Winkler similarity of a fuzzy name', () => {
     const r = result('given', { name: [n(['Gabriela'])] }, { name: [n(['Grabiela'])] });
     expect(r.similarity).toBeCloseTo(0.9625, 4);
+  });
+});
+
+describe('bounded work (the incoming record is untrusted)', () => {
+  const names = (count: number, last: HumanNameLike) => [
+    ...Array.from({ length: count }, (_, i) => n([`Pessoa${i}`], `Familia${i}`)),
+    last,
+  ];
+
+  it('compares at most 10 distinct names per side', () => {
+    const tenth = result(
+      'given',
+      { name: names(9, n(['Ana'], 'Souza')) },
+      { name: [n(['Ana'], 'Souza')] },
+    );
+    const eleventh = result(
+      'given',
+      { name: names(10, n(['Ana'], 'Souza')) },
+      { name: [n(['Ana'], 'Souza')] },
+    );
+    expect([tenth.outcome, eleventh.outcome]).toEqual(['exact', 'conflict']);
+  });
+
+  it('counts duplicate names once, so they do not use up the limit', () => {
+    const duplicates = Array.from({ length: 20 }, () => n(['Carla'], 'Pereira'));
+    const r = result(
+      'given',
+      { name: [...duplicates, n(['Ana'], 'Souza')] },
+      { name: [n(['Ana'], 'Souza')] },
+    );
+    expect(r.outcome).toBe('exact');
+  });
+
+  it('compares at most 10 distinct addresses per side', () => {
+    const others = Array.from({ length: 10 }, (_, i) => ({
+      line: [`Rua ${i}`],
+      postalCode: '01310-100',
+    }));
+    const target = { line: ['Rua das Flores 100'], postalCode: '80010-000' };
+    const r = result('address', { address: [...others, target] }, { address: [target] });
+    expect(r.outcome).toBe('conflict');
+  });
+
+  it('runs Jaro-Winkler on the first 10 tokens of a name part only; equality uses all', () => {
+    const family = Array.from({ length: 10 }, (_, i) => `Familia${i}`).join(' ');
+    const typo = result(
+      'family',
+      { name: [n(['Ana'], `${family} Oliveira`)] },
+      { name: [n(['Ana'], 'Olivera')] },
+    );
+    const equal = result(
+      'family',
+      { name: [n(['Ana'], `${family} Oliveira`)] },
+      { name: [n(['Ana'], 'Oliveira')] },
+    );
+    expect([typo.outcome, equal.outcome]).toEqual(['conflict', 'exact']);
+  });
+
+  // Each of these was quadratic or worse before the limits (0.7 s to 11 s); now milliseconds.
+  it('handles huge arrays in bounded time', { timeout: 5000 }, () => {
+    const many = Array.from({ length: 100_000 }, (_, i) => n(['Ana'], `Souza${i}`));
+    const emails = (k: string) =>
+      Array.from({ length: 30_000 }, (_, i) => email(`${k}${i}@example.com`));
+    const family = Array.from({ length: 5_000 }, (_, i) => `sobrenome${i}`).join(' ');
+    compareFields(patient({ name: many }), patient({ name: many }));
+    compareFields(patient({ telecom: emails('a') }), patient({ telecom: emails('b') }));
+    compareFields(
+      patient({ name: [n(['Ana'], family)] }),
+      patient({ name: [n(['Ana'], family.replaceAll('sobrenome', 'nomesobre'))] }),
+    );
   });
 });
 

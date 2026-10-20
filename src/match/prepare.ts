@@ -8,17 +8,25 @@ import type { MatchContext } from './context.js';
 
 /** A patient with every compared field normalized once. Unusable values are left out. */
 export interface PreparedPatient {
-  names: readonly NormalizedName[];
   birthDate: NormalizedBirthDate | undefined;
-  /** Unique, in input order. */
-  phones: readonly string[];
-  emails: readonly string[];
+  /** Distinct, in input order, at most `MAX_ENTRIES`. */
+  names: readonly NormalizedName[];
+  /** Distinct, in input order. */
+  phones: ReadonlySet<string>;
+  emails: ReadonlySet<string>;
+  /** Distinct, in input order, at most `MAX_ENTRIES`. */
   addresses: readonly NormalizedAddress[];
-  /** Trusted systems only: system -> unique values. */
-  identifiers: ReadonlyMap<string, readonly string[]>;
+  /** Trusted systems only: system -> distinct values. */
+  identifiers: ReadonlyMap<string, ReadonlySet<string>>;
   /** `unknown` counts as missing. */
   gender: string | undefined;
 }
+
+/**
+ * At most this many distinct names and addresses per patient are compared. Best-pair matching
+ * costs local x incoming, and the incoming record is untrusted; real records have a handful.
+ */
+export const MAX_ENTRIES = 10;
 
 /** Contact point systems that carry phone numbers. */
 const PHONE_SYSTEMS: ReadonlySet<string> = new Set(['phone', 'sms']);
@@ -33,22 +41,25 @@ export function preparePatient(patient: PatientLike, ctx: MatchContext): Prepare
     .filter((c) => c.system === 'email')
     .map((c) => (c.value === undefined ? undefined : normalizeEmail(c.value)));
 
-  const identifiers = new Map<string, string[]>();
+  const identifiers = new Map<string, Set<string>>();
   for (const { system, value } of patient.identifier ?? []) {
     if (system === undefined || value === undefined || !ctx.trustedSystems.has(system)) continue;
     const normalized = normalizeIdentifier(system, value);
     if (normalized === undefined) continue;
-    const values = identifiers.get(system) ?? [];
-    if (!values.includes(normalized)) values.push(normalized);
+    const values = identifiers.get(system) ?? new Set();
+    values.add(normalized);
     identifiers.set(system, values);
   }
 
   return {
-    names: defined((patient.name ?? []).map(normalizeName)),
+    names: distinct(defined((patient.name ?? []).map(normalizeName))).slice(0, MAX_ENTRIES),
     birthDate: patient.birthDate === undefined ? undefined : normalizeBirthDate(patient.birthDate),
-    phones: unique(defined(phones)),
-    emails: unique(defined(emails)),
-    addresses: defined((patient.address ?? []).map(normalizeAddress)),
+    phones: new Set(defined(phones)),
+    emails: new Set(defined(emails)),
+    addresses: distinct(defined((patient.address ?? []).map(normalizeAddress))).slice(
+      0,
+      MAX_ENTRIES,
+    ),
     identifiers,
     gender: patient.gender === 'unknown' ? undefined : patient.gender,
   };
@@ -65,6 +76,13 @@ function defined<T>(values: readonly (T | undefined)[]): T[] {
   return values.filter((v): v is T => v !== undefined);
 }
 
-function unique<T>(values: readonly T[]): T[] {
-  return [...new Set(values)];
+/** Drops structurally equal values (e.g. an `official` and a `usual` name that normalize alike). */
+function distinct<T>(values: readonly T[]): T[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = JSON.stringify(value);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

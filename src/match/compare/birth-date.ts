@@ -15,7 +15,7 @@ export function compareBirthDate(
   b: NormalizedBirthDate | undefined,
   ctx: MatchContext,
 ): FieldResult {
-  const values = { local: a?.value, incoming: b?.value };
+  const values = () => ({ local: a?.value, incoming: b?.value });
   if (a === undefined || b === undefined) {
     return fieldResult(
       ctx,

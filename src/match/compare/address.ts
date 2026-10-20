@@ -35,7 +35,7 @@ function comparePair(
   b: NormalizedAddress,
   ctx: MatchContext,
 ): FieldResult | undefined {
-  const values = { local: describe(a), incoming: describe(b) };
+  const values = () => ({ local: describe(a), incoming: describe(b) });
   if (a.country !== undefined && b.country !== undefined && a.country !== b.country) {
     return fieldResult(ctx, 'address', 'conflict', 'addresses are in different countries', values);
   }

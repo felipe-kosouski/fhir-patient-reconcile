@@ -195,12 +195,20 @@ function normalizeLine(
 
 /** Drops a run of number markers that ends in a number ("no nº 5" -> "5"). */
 function dropNumberMarkers(tokens: readonly string[]): string[] {
-  return tokens.filter((t, i) => {
-    if (!NUMBER_MARKERS.has(t)) return true;
-    let next = i + 1;
-    while (NUMBER_MARKERS.has(tokens[next] ?? '')) next++;
-    return !/^\d/.test(tokens[next] ?? '');
-  });
+  // One backward pass: `beforeNumber` says whether the first non-marker token after the current
+  // position starts with a digit. Scanning forward from each marker would be quadratic.
+  const kept: string[] = [];
+  let beforeNumber = false;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const token = tokens[i] ?? '';
+    if (!NUMBER_MARKERS.has(token)) {
+      beforeNumber = /^\d/.test(token);
+      kept.push(token);
+    } else if (!beforeNumber) {
+      kept.push(token);
+    }
+  }
+  return kept.reverse();
 }
 
 function usableText(value: string | undefined): string | undefined {

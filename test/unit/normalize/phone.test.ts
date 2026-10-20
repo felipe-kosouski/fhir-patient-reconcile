@@ -234,6 +234,19 @@ const cases: Case[] = [
     expected: undefined,
     why: 'no default: also a valid Brazilian landline (41) 5555-0123, so ambiguous',
   },
+  // --- length bound (incoming values are untrusted) ---
+  {
+    input: `${' '.repeat(100)}(41) 99876-5432${' '.repeat(100)}`,
+    defaultCountry: 'BR',
+    expected: mobileBR,
+    why: 'padding from fixed-width exports is trimmed before the length check',
+  },
+  {
+    input: `(41) 99876-5432${'-'.repeat(50)}`,
+    defaultCountry: 'BR',
+    expected: undefined,
+    why: 'longer than 64 characters after trimming',
+  },
   // --- empty ---
   { input: '', defaultCountry: 'BR', expected: undefined, why: 'empty' },
   { input: 'n/a', defaultCountry: 'BR', expected: undefined, why: 'no digits' },

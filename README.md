@@ -173,6 +173,10 @@ How correctness is checked, not just asserted:
   one-line reason each. It was written before any matching code exists, and the weights will be
   calibrated against it. Cases that cannot pass are documented as known limitations instead of
   having their answers changed.
+- **Bounded work on untrusted input.** The incoming record comes from outside, so every
+  normalizer and comparator is measured on hostile input (long runs of spaces, huge arrays).
+  A review found and fixed a phone regex with cubic backtracking; best-pair name and address
+  matching compares at most 10 distinct entries per side.
 - **Packaging verified.** `publint --strict` and `@arethetypeswrong/cli` run in CI, and smoke
   tests load the built package through both `import` and `require`.
 - **Synthetic data only.** Invented names, `example.com` emails, fictional phone ranges and

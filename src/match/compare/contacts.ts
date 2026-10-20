@@ -8,28 +8,29 @@ import type { FieldResult } from '../types.js';
  */
 export function compareContacts(
   field: 'phone' | 'email',
-  a: readonly string[],
-  b: readonly string[],
+  a: ReadonlySet<string>,
+  b: ReadonlySet<string>,
   ctx: MatchContext,
 ): FieldResult {
   const noun = field === 'phone' ? 'phone number' : 'email address';
-  if (a.length === 0 || b.length === 0) {
-    return fieldResult(ctx, field, 'missing', `no usable ${noun} on one or both sides`, {
-      local: listed(a),
-      incoming: listed(b),
-    });
+  const values = () => ({ local: listed(a), incoming: listed(b) });
+  if (a.size === 0 || b.size === 0) {
+    return fieldResult(ctx, field, 'missing', `no usable ${noun} on one or both sides`, values);
   }
-  const shared = a.find((value) => b.includes(value));
+  const shared = first(a, (value) => b.has(value));
   if (shared !== undefined) {
-    return fieldResult(ctx, field, 'exact', `a ${noun} is shared`, {
+    return fieldResult(ctx, field, 'exact', `a ${noun} is shared`, () => ({
       local: shared,
       incoming: shared,
-    });
+    }));
   }
-  return fieldResult(ctx, field, 'conflict', `both sides have a ${noun} and none is shared`, {
-    local: listed(a),
-    incoming: listed(b),
-  });
+  return fieldResult(
+    ctx,
+    field,
+    'conflict',
+    `both sides have a ${noun} and none is shared`,
+    values,
+  );
 }
 
 /**
@@ -38,8 +39,8 @@ export function compareContacts(
  * system belong to two people, and the merge must fail closed.
  */
 export function compareIdentifiers(
-  a: ReadonlyMap<string, readonly string[]>,
-  b: ReadonlyMap<string, readonly string[]>,
+  a: ReadonlyMap<string, ReadonlySet<string>>,
+  b: ReadonlyMap<string, ReadonlySet<string>>,
   ctx: MatchContext,
 ): FieldResult {
   const agreeing: string[] = [];
@@ -47,10 +48,16 @@ export function compareIdentifiers(
   for (const [system, values] of a) {
     const other = b.get(system);
     if (other === undefined) continue;
-    (values.some((v) => other.includes(v)) ? agreeing : disagreeing).push(system);
+    (first(values, (v) => other.has(v)) !== undefined ? agreeing : disagreeing).push(system);
   }
-  const describe = (map: ReadonlyMap<string, readonly string[]>, systems: readonly string[]) =>
-    listed(systems.flatMap((system) => (map.get(system) ?? []).map((v) => `${system}|${v}`)));
+  const describe = (systems: readonly string[]) => () => ({
+    local: listed(
+      systems.flatMap((system) => [...(a.get(system) ?? [])].map((v) => `${system}|${v}`)),
+    ),
+    incoming: listed(
+      systems.flatMap((system) => [...(b.get(system) ?? [])].map((v) => `${system}|${v}`)),
+    ),
+  });
 
   if (disagreeing.length > 0) {
     return fieldResult(
@@ -58,7 +65,7 @@ export function compareIdentifiers(
       'identifier',
       'conflict',
       `trusted identifiers differ (system: ${disagreeing.join(', ')})`,
-      { local: describe(a, disagreeing), incoming: describe(b, disagreeing) },
+      describe(disagreeing),
     );
   }
   if (agreeing.length > 0) {
@@ -67,7 +74,7 @@ export function compareIdentifiers(
       'identifier',
       'exact',
       `a trusted identifier is equal (system: ${agreeing.join(', ')})`,
-      { local: describe(a, agreeing), incoming: describe(b, agreeing) },
+      describe(agreeing),
     );
   }
   return fieldResult(ctx, 'identifier', 'missing', 'no trusted identifier system on both sides');
@@ -78,7 +85,7 @@ export function compareGender(
   b: string | undefined,
   ctx: MatchContext,
 ): FieldResult {
-  const values = { local: a, incoming: b };
+  const values = () => ({ local: a, incoming: b });
   if (a === undefined || b === undefined) {
     return fieldResult(ctx, 'gender', 'missing', 'no known gender on one or both sides', values);
   }
@@ -87,6 +94,12 @@ export function compareGender(
     : fieldResult(ctx, 'gender', 'conflict', 'genders differ', values);
 }
 
-function listed(values: readonly string[]): string | undefined {
-  return values.length === 0 ? undefined : values.join(', ');
+function listed(values: Iterable<string>): string | undefined {
+  const list = [...values];
+  return list.length === 0 ? undefined : list.join(', ');
+}
+
+function first<T>(values: Iterable<T>, test: (value: T) => boolean): T | undefined {
+  for (const value of values) if (test(value)) return value;
+  return undefined;
 }
