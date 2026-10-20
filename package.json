@@ -1,6 +1,6 @@
 {
   "name": "fhir-patient-reconcile",
-  "version": "0.0.0",
+  "version": "0.1.0-alpha.0",
   "description": "Explainable matching and fail-closed merging of FHIR R4 Patient resources.",
   "keywords": [
     "fhir",
@@ -53,7 +53,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "check:package": "publint --strict && attw --pack .",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:package && pnpm check:package"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:package && pnpm check:package",
+    "prepublishOnly": "pnpm check"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",

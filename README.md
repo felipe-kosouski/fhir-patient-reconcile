@@ -5,12 +5,12 @@
 [![CI](https://github.com/felipe-kosouski/fhir-patient-reconcile/actions/workflows/ci.yml/badge.svg)](https://github.com/felipe-kosouski/fhir-patient-reconcile/actions/workflows/ci.yml)
 ![zero dependencies](https://img.shields.io/badge/runtime_dependencies-0-brightgreen)
 ![license](https://img.shields.io/badge/license-Apache--2.0-blue)
+[![npm next](https://img.shields.io/npm/v/fhir-patient-reconcile/next)](https://www.npmjs.com/package/fhir-patient-reconcile)
 
 > [!NOTE]
-> **Work in progress.** Normalizers and `matchPatients` work today; calibration against the
-> hard-case table and the fail-closed merge are being built next, and the package is not on npm
-> yet.
-> See [Status](#status) for exactly what works today.
+> **Pre-release.** `0.1.0-alpha.0` is on npm under the `next` tag. Normalizers and
+> `matchPatients` work today; the fail-closed merge is being built next, and the API may still
+> change before `0.1.0`. See [Status](#status) for exactly what works today.
 
 ## The problem
 
@@ -65,11 +65,15 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | `matchPatients` (weights, thresholds, vetoes, minimum evidence, FHIR `match-grade`) | ✅ done |
 | Calibration against the hard-case table: 42 of 45 pass, 3 [known limitations](#known-limitations) ([report](docs/calibration.md)) | ✅ done |
 | Property tests for matching (symmetry, determinism, no mutation, no patient values in explanations) and an [explanation snapshot](test/unit/match/__snapshots__/explanation.json) | ✅ done |
-| npm pre-release `0.1.0-alpha.0` (tag `next`) | 🚧 next |
-| `mergePatient` (fail-closed, change report) | ⏳ planned |
+| npm pre-release `0.1.0-alpha.0` (tag `next`) | ✅ done |
+| `mergePatient` (fail-closed, change report) | 🚧 next |
 | npm release `0.1.0` with provenance | ⏳ planned |
 
 ## What works today
+
+```bash
+npm install fhir-patient-reconcile@next
+```
 
 ```ts
 import { matchPatients } from 'fhir-patient-reconcile';
