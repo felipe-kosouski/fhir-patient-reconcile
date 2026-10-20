@@ -11,6 +11,7 @@ import type {
   IdentifierLike,
   PatientLike,
 } from '../../src/index.js';
+import type { FieldWeightOverrides, MatchOptions } from '../../src/match/types.js';
 
 type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
 
@@ -35,6 +36,21 @@ describe('every optional property is `?: T | undefined`', () => {
     expectTypeOf<OptionalsAcceptUndefined<HumanNameLike>>().toEqualTypeOf<true>();
     expectTypeOf<OptionalsAcceptUndefined<ContactPointLike>>().toEqualTypeOf<true>();
     expectTypeOf<OptionalsAcceptUndefined<AddressLike>>().toEqualTypeOf<true>();
+  });
+
+  it('on MatchOptions and its nested objects (callers build them too)', () => {
+    type Nested = Required<MatchOptions>;
+    expectTypeOf<OptionalsAcceptUndefined<MatchOptions>>().toEqualTypeOf<true>();
+    expectTypeOf<
+      OptionalsAcceptUndefined<Exclude<Nested['identifierSystems'], undefined>>
+    >().toEqualTypeOf<true>();
+    expectTypeOf<
+      OptionalsAcceptUndefined<Exclude<Nested['nameSimilarity'], undefined>>
+    >().toEqualTypeOf<true>();
+    expectTypeOf<
+      OptionalsAcceptUndefined<Exclude<Nested['weights'], undefined>>
+    >().toEqualTypeOf<true>();
+    expectTypeOf<OptionalsAcceptUndefined<FieldWeightOverrides>>().toEqualTypeOf<true>();
   });
 });
 

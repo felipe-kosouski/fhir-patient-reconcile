@@ -44,6 +44,15 @@ These planning files are local-only (git-ignored, not in the public repo).
 - `damerauLevenshtein`: unrestricted (Lowrance-Wagner), so it is a metric; `CA -> ABC` = 2, not the OSA value 3.
 - Both compare code points as given; callers normalize first.
 
+## Field comparators (session 7)
+- Internal (`src/match/`): `compareFields(local, incoming, options)` returns one `FieldResult` per field in `MatchField` order. `missing` always scores 0; reasons never contain patient values; `local`/`incoming` only with `includeValues`.
+- Owner decisions: a partial birth date that agrees is `missing` (it can only disprove); names use the best whole-name pair across `name[]` (given/family/middle never mixed); addresses: same postal code + line = exact, same postal code or same line without postal codes = fuzzy, different postal codes, lines or countries = conflict, city/state alone not compared, best comparable pair across `address[]`; `MatchOptions.normalizePhone` replaces the built-in phone parser (`''` = unusable).
+- Family names compare as sets (subset = exact, overlap or JW >= fuzzyMin = fuzzy); a name from `text` pools middle + family. Middle initials are fuzzy. Name tokens over 100 characters are compared for equality only (JW is O(n·m)).
+- Birth date fuzzy: day/month swapped, one day apart (UTC calendar), one year digit (same month and day). Two year digits (1987/1978) are a conflict.
+- Phones from `phone` and `sms` contact points; no fuzzy step for phones or emails.
+- Identifiers: trusted systems only (default: RNDS CPF; `identifierSystems.trusted` replaces the list); CPF values validated with `normalizeCpf`, others trimmed. Any trusted system with disjoint values is a conflict even if another agrees (fail closed).
+- Every `MatchOptions` property (and nested ones) is `?: T | undefined`, checked in `test/types/rules.test-d.ts`.
+
 ## Hard-case table
 - `test/cases/match-cases.ts`: expected decision + one-line WHY per case, written in session 5 before any matching code. A list of decisions means "any of these" and is used only where the plan sets a limit (twins: never `match`). `vetoes` lists vetoes that must be present.
 - `test/cases/match-cases.test.ts` checks the table itself (synthetic data, every input parses under the case's options), so a case can only fail on its decision.

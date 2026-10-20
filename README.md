@@ -61,8 +61,8 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | `normalizeBirthDate` (partial dates), `normalizeAddress` (CEP/ZIP + street line), `normalizeCpf` | ✅ done |
 | Hard-case table for matching: 40 cases with expected decisions, written before any weights | ✅ done |
 | `jaroWinkler`, `damerauLevenshtein` (checked against published reference values) | ✅ done |
-| Per-field comparators | 🚧 next |
-| `matchPatients` (weights, thresholds, vetoes, FHIR `match-grade`) | ⏳ planned |
+| Per-field comparators (outcome, points and a reason without patient values, per field) | ✅ done (internal, used by `matchPatients`) |
+| `matchPatients` (weights, thresholds, vetoes, FHIR `match-grade`) | 🚧 next |
 | `mergePatient` (fail-closed, change report) | ⏳ planned |
 | npm release `0.1.0` with provenance | ⏳ planned |
 
