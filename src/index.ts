@@ -19,6 +19,7 @@ export {
   type PhoneCountry,
   RNDS_CPF_SYSTEM,
 } from './normalize/index.js';
+export { damerauLevenshtein, jaroWinkler } from './similarity/index.js';
 export type {
   AddressLike,
   AdministrativeGender,

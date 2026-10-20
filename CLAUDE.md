@@ -39,6 +39,11 @@ These planning files are local-only (git-ignored, not in the public repo).
 - CPF: 11 digits with `.`/`-`/space separators; check digits verified; repeated digits and ascending sequences (`123.456.789-09`, `012.345.678-90`) are placeholders; lost leading zeros are not restored. RNDS system: `http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf` (from the RNDS CPF profile).
 - Property tests must be able to fail: assert that generated *valid* inputs produce a result, and confirm new properties by breaking the code on purpose.
 
+## Similarity (session 6)
+- `jaroWinkler`: follows Winkler's reference code `strcmp95.c` (owner decision, session 6): window `floor(max/2) - 1`, transpositions = out-of-order matches / 2 **rounded down**, p = 0.1, prefix up to 4, bonus only when Jaro **> 0.7**. strcmp95's extensions (similar-character table, long-string adjustment, digits ending the prefix, case/space folding) are not applied, as in rapidfuzz. Oracles: Winkler 1990 values, Apache Commons Text's `JaroWinklerSimilarityTest` table (except `aaabcd`/`aaacdb`: Apache does not round down) and rapidfuzz 3.14.5 values, ±0.001.
+- `damerauLevenshtein`: unrestricted (Lowrance-Wagner), so it is a metric; `CA -> ABC` = 2, not the OSA value 3.
+- Both compare code points as given; callers normalize first.
+
 ## Hard-case table
 - `test/cases/match-cases.ts`: expected decision + one-line WHY per case, written in session 5 before any matching code. A list of decisions means "any of these" and is used only where the plan sets a limit (twins: never `match`). `vetoes` lists vetoes that must be present.
 - `test/cases/match-cases.test.ts` checks the table itself (synthetic data, every input parses under the case's options), so a case can only fail on its decision.

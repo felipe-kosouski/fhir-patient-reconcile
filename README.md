@@ -60,7 +60,8 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | `normalizePhone` (Brazil + NANP, ninth digit), `normalizeEmail`, placeholder values | ✅ done |
 | `normalizeBirthDate` (partial dates), `normalizeAddress` (CEP/ZIP + street line), `normalizeCpf` | ✅ done |
 | Hard-case table for matching: 40 cases with expected decisions, written before any weights | ✅ done |
-| Jaro-Winkler and Damerau-Levenshtein | 🚧 next |
+| `jaroWinkler`, `damerauLevenshtein` (checked against published reference values) | ✅ done |
+| Per-field comparators | 🚧 next |
 | `matchPatients` (weights, thresholds, vetoes, FHIR `match-grade`) | ⏳ planned |
 | `mergePatient` (fail-closed, change report) | ⏳ planned |
 | npm release `0.1.0` with provenance | ⏳ planned |
@@ -69,6 +70,8 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 
 ```ts
 import {
+  damerauLevenshtein,
+  jaroWinkler,
   normalizeAddress,
   normalizeBirthDate,
   normalizeCpf,
@@ -115,6 +118,12 @@ normalizeAddress({ line: ['R. das Flores, nº 100'], city: 'Curitiba', postalCod
 
 normalizeAddress({ line: ['123 N Main St.'], postalCode: '62701-1234' });
 // { line: '123 north main street', city: undefined, state: undefined, postalCode: '62701', country: 'US' }
+
+jaroWinkler('martha', 'marhta');
+// 0.9611 (Winkler's published value: 0.961)
+
+damerauLevenshtein('CA', 'ABC');
+// 2: CA -> AC -> ABC (unrestricted; "optimal string alignment" would give 3)
 ```
 
 ## Planned API (v0.1)
@@ -146,7 +155,10 @@ How correctness is checked, not just asserted:
   `@medplum/fhirtypes` packages, not against a copy of their shapes. Phones follow the Anatel and
   NANP numbering plans; CPF tests use published worked examples and a second, independently
   written form of the check-digit rule; birth dates are checked against the JavaScript calendar.
-  The upcoming similarity tests use published Jaro-Winkler reference values.
+  Jaro-Winkler follows Winkler's reference code (`strcmp95.c`) and is checked against his
+  published values, Apache Commons Text's reference table and rapidfuzz (within 0.001);
+  Damerau-Levenshtein against Wikipedia's worked example, rapidfuzz and two independently
+  written reference distances (optimal string alignment and plain Levenshtein).
 - **Type tests that are proven to fail.** The type-compatibility suite runs under both
   `exactOptionalPropertyTypes: true` and `false`. Each design rule was broken on purpose
   (index signature, missing `| undefined`, code unions, mutable arrays) to confirm the suite
