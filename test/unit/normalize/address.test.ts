@@ -149,6 +149,16 @@ const cases: Case[] = [
     expected: undefined,
     why: 'Address.text is not parsed in v0.1',
   },
+  {
+    address: { line: ['123 Main St', 'N/A'], country: 'US' },
+    expected: { line: '123 main street', country: 'US' },
+    why: 'a placeholder in one line entry is dropped on its own (not expanded to "north a")',
+  },
+  {
+    address: { line: ['Rua A 10', 'Não informado'], country: 'BR' },
+    expected: { line: 'rua a 10', country: 'BR' },
+    why: 'same rule for Brazilian placeholder entries',
+  },
   { address: {}, expected: undefined, why: 'empty address' },
 ];
 

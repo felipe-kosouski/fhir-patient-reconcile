@@ -181,9 +181,10 @@ function normalizeLine(
   lines: readonly string[],
   country: AddressCountry | undefined,
 ): string | undefined {
-  const tokens = tokenize(lines.join(' '));
-  // Placeholders are checked as written: expanded, "N/A" would become "north a".
-  if (usableText(tokens.join(' ')) === undefined) return undefined;
+  // Placeholders are checked per entry and as written: a second line of "N/A" is common, and
+  // expanded it would become "north a".
+  const tokens = tokenize(lines.filter((line) => usableText(line) !== undefined).join(' '));
+  if (tokens.length === 0) return undefined;
   const abbreviations =
     country === 'BR' ? BR_ABBREVIATIONS : country === 'US' ? US_ABBREVIATIONS : new Map();
   const words = (country === 'BR' ? dropNumberMarkers(tokens) : tokens).map(
