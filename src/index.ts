@@ -17,6 +17,15 @@ export {
   type Veto,
 } from './match/index.js';
 export {
+  type Change,
+  type ChangeAction,
+  type MergeOptions,
+  type MergePath,
+  type MergePolicy,
+  type MergeResult,
+  mergePatient,
+} from './merge/index.js';
+export {
   type AddressCountry,
   type BirthDatePrecision,
   type GenerationalSuffix,

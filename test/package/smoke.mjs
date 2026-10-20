@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   damerauLevenshtein,
   matchPatients,
+  mergePatient,
   normalizeName,
   normalizeText,
 } from 'fhir-patient-reconcile';
@@ -17,4 +18,5 @@ const patient = {
   birthDate: '1980-06-15',
 };
 assert.equal(matchPatients(patient, patient).decision, 'possible');
+assert.equal(mergePatient(patient, patient).status, 'refused'); // possible does not merge
 console.log('ESM import OK');

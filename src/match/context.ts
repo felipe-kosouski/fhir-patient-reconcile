@@ -1,6 +1,7 @@
 import { RNDS_CPF_SYSTEM } from '../normalize/cpf.js';
 import { normalizePhone } from '../normalize/phone.js';
 import { isRepeatedDigits } from '../normalize/placeholders.js';
+import { requireKnownKeys } from '../util/input.js';
 import { DEFAULT_NAME_FUZZY_MIN, DEFAULT_THRESHOLDS, DEFAULT_WEIGHTS } from './defaults.js';
 import type {
   FieldOutcome,
@@ -120,16 +121,6 @@ function withoutUndefined<T extends object>(
   return Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined)) as {
     [K in keyof T]?: Exclude<T[K], undefined>;
   };
-}
-
-function requireKnownKeys(values: object, known: object, name: string): void {
-  for (const key of Object.keys(values)) {
-    if (!Object.hasOwn(known, key)) {
-      const allowed = Object.keys(known).join(', ');
-      const path = name === 'options' ? key : `${name}.${key}`;
-      throw new RangeError(`unknown option ${path} (expected one of: ${allowed})`);
-    }
-  }
 }
 
 function requireFinite(value: unknown, name: string): void {

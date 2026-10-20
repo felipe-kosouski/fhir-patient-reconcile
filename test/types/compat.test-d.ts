@@ -5,11 +5,11 @@ import type { Patient as MedplumPatient } from '@medplum/fhirtypes';
 import type { Patient as R4Patient } from 'fhir/r4.js';
 import type { Patient as R5Patient } from 'fhir/r5.js';
 import { describe, expectTypeOf, it } from 'vitest';
-import { matchPatients, type PatientLike } from '../../src/index.js';
+import { matchPatients, mergePatient, type PatientLike } from '../../src/index.js';
 
-// Stand-in with the planned signature of mergePatient, so the constraint is tested before the
-// function exists. Replaced by the real one in session 11.
-declare function keepsType<P extends PatientLike>(local: P, incoming: PatientLike): P;
+/** The patient a merge returns, with the caller's own type. */
+const keepsType = <P extends PatientLike>(local: P, incoming: PatientLike): P =>
+  mergePatient(local, incoming).patient;
 
 describe('PatientLike accepts third-party Patient types without casts', () => {
   it('@types/fhir R4', () => {
@@ -33,8 +33,11 @@ describe('PatientLike accepts third-party Patient types without casts', () => {
   });
 });
 
-describe('a generic constraint returns the caller type', () => {
+describe('mergePatient returns the caller type', () => {
   it('keeps R4, R5 and Medplum types', () => {
+    expectTypeOf(
+      mergePatient({} as R4Patient, {} as MedplumPatient).patient,
+    ).toEqualTypeOf<R4Patient>();
     expectTypeOf(keepsType({} as R4Patient, {} as MedplumPatient)).toEqualTypeOf<R4Patient>();
     expectTypeOf(keepsType({} as R5Patient, {} as R4Patient)).toEqualTypeOf<R5Patient>();
     expectTypeOf(keepsType({} as MedplumPatient, {} as R4Patient)).toEqualTypeOf<MedplumPatient>();

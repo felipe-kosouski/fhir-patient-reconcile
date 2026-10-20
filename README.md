@@ -9,8 +9,8 @@
 
 > [!NOTE]
 > **Pre-release.** `0.1.0-alpha.0` is on npm under the `next` tag. Normalizers and
-> `matchPatients` work today; the fail-closed merge is being built next, and the API may still
-> change before `0.1.0`. See [Status](#status) for exactly what works today.
+> `matchPatients` are in it; `mergePatient` is on `main` and comes in the next pre-release. The
+> API may still change before `0.1.0`. See [Status](#status) for exactly what works today.
 
 ## The problem
 
@@ -66,7 +66,8 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | Calibration against the hard-case table: 42 of 45 pass, 3 [known limitations](#known-limitations) ([report](docs/calibration.md)) | ✅ done |
 | Property tests for matching (symmetry, determinism, no mutation, no patient values in explanations) and an [explanation snapshot](test/unit/match/__snapshots__/explanation.json) | ✅ done |
 | npm pre-release `0.1.0-alpha.0` (tag `next`) | ✅ done |
-| `mergePatient` (fail-closed, change report) | 🚧 next |
+| `mergePatient`: fail-closed precondition, allowlist, `fill-empty-only`, protected paths, change report | ✅ done |
+| `mergePatient` array policies (`append-new`) and ADR-0002 (fail-closed design) | 🚧 next |
 | npm release `0.1.0` with provenance | ⏳ planned |
 
 ## What works today
@@ -114,6 +115,31 @@ matchPatients(local, twin, { defaultCountry: 'BR' }).decision;
 const grandson = { ...local, name: [{ family: 'Souza Neto', given: ['João'] }], birthDate: '2010-05-02' } as const;
 matchPatients({ ...local, name: [{ family: 'Souza Filho', given: ['João'] }] }, grandson).vetoes;
 // [generational-suffix-conflict, birthdate-conflict]: decision 'no-match', grade 'certainly-not'
+```
+
+Merging is fail-closed: it runs the match itself, writes only where the local record is empty,
+never touches protected or unlisted fields, and returns an unchanged copy when it refuses.
+
+```ts
+import { mergePatient } from 'fhir-patient-reconcile';
+
+const matchOptions = { defaultCountry: 'BR' } as const;
+const merged = mergePatient(local, incoming, { matchOptions, source: 'hie:example' });
+merged.status;  // 'merged'
+merged.changes; // no patient values unless includeValues: true
+//   { path: 'birthDate', action: 'skipped-duplicate', origin: 'local' }
+//   { path: 'name', action: 'kept-local', origin: 'local' }
+//   { path: 'telecom[system=phone]', action: 'skipped-duplicate', origin: 'local' }
+//   { path: 'telecom[system=email]', action: 'filled', origin: 'incoming', source: 'hie:example' }
+merged.patient.telecom;
+// [{ system: 'phone', value: '(41) 99876-5432' }, { system: 'email', value: 'joao.souza@example.com' }]
+
+mergePatient(local, twin, { matchOptions }).status;
+// 'refused' (with an unchanged copy of local): only a 'match' merges, 'possible' needs
+// require: 'possible', and a veto always refuses
+
+mergePatient(local, incoming, { matchOptions, protectedPaths: ['telecom'] }).changes.at(-1);
+// { path: 'telecom[system=email]', action: 'skipped-protected', origin: 'local' }
 ```
 
 Building blocks, also exported:
@@ -191,19 +217,12 @@ See the [calibration report](docs/calibration.md) for every case.
 
 ## Planned API (v0.1)
 
-Not implemented yet. This is the target the work above builds toward.
+Not implemented yet: array policies for `mergePatient` (session 12).
 
 ```ts
-import { matchPatients, mergePatient } from 'fhir-patient-reconcile';
-
-const match = matchPatients(local, incoming, { defaultCountry: 'BR' });
-const result = mergePatient(local, incoming, {
-  match,
-  protectedPaths: ['telecom.phone', 'address'], // a human confirmed these
-  source: 'hie:example',
+mergePatient(local, incoming, {
+  arrays: { telecom: 'append-new' }, // also add new phones and emails when local already has some
 });
-result.status;  // 'merged' | 'refused'
-result.changes; // e.g. { path: 'telecom[system=email]', action: 'filled', origin: 'incoming' }
 ```
 
 ## Engineering notes

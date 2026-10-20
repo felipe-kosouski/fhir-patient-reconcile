@@ -5,6 +5,7 @@ import { normalizeEmail } from '../normalize/email.js';
 import { type NormalizedName, normalizeName } from '../normalize/name.js';
 import { stringOrEmpty } from '../normalize/text.js';
 import type { PatientLike } from '../types/fhir.js';
+import { objects } from '../util/input.js';
 import type { MatchContext } from './context.js';
 
 /** A patient with every compared field normalized once. Unusable values are left out. */
@@ -75,16 +76,6 @@ function normalizeIdentifier(system: string, value: string): string | undefined 
   if (system === RNDS_CPF_SYSTEM) return normalizeCpf(value);
   const trimmed = value.normalize('NFKC').trim();
   return trimmed === '' ? undefined : trimmed;
-}
-
-/**
- * The object entries of a FHIR array. Records come from outside, so a `null` entry or a
- * non-array value reads as missing instead of throwing.
- */
-function objects<T extends object>(values: readonly T[] | undefined): T[] {
-  return Array.isArray(values)
-    ? values.filter((v): v is T => typeof v === 'object' && v !== null)
-    : [];
 }
 
 function defined<T>(values: readonly (T | undefined)[]): T[] {

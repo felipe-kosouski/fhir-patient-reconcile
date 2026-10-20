@@ -11,6 +11,7 @@ import type {
   HumanNameLike,
   IdentifierLike,
   MatchOptions,
+  MergeOptions,
   PatientLike,
 } from '../../src/index.js';
 
@@ -55,6 +56,10 @@ describe('every optional property is `?: T | undefined`', () => {
       OptionalsAcceptUndefined<Exclude<Nested['weights'], undefined>>
     >().toEqualTypeOf<true>();
     expectTypeOf<OptionalsAcceptUndefined<FieldWeightOverrides>>().toEqualTypeOf<true>();
+  });
+
+  it('on MergeOptions', () => {
+    expectTypeOf<OptionalsAcceptUndefined<MergeOptions>>().toEqualTypeOf<true>();
   });
 });
 

@@ -85,6 +85,15 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Shared generators live in `test/property/arbitraries.ts` (`patient`, `options`, `untrusted`). `match.property.test.ts`: determinism (same result on fresh copies), no mutation (deep-frozen inputs and options), no patient values (marker text never appears; explanations contain no digits outside `(system: …)`, and only configured systems), robustness on untrusted JSON. Each was confirmed by a mutant.
 - `test/unit/match/__snapshots__/explanation*.json`: a full explanation without and with `includeValues`; regenerate with `-u` and review the diff. Reading it caught "a email address".
 
+## mergePatient (session 11, owner decisions)
+- Always runs `matchPatients` itself (with `matchOptions`); a `match` passed in must equal that run (decision, points, grade, evidence, thresholds, vetoes) or the merge refuses. Callers must pass the same `matchOptions` they matched with.
+- Merges on `match`, or `possible` with explicit `require: 'possible'`; **any veto refuses**, whatever `require` says.
+- fill-empty-only, "empty" = absent: a local placeholder, a partial date or a `_birthDate`/`_gender` element (data-absent-reason) counts as data and is kept. Never overwrites, never removes.
+- Granularity: `name` only when local has no name entry; `telecom` per system (phone, email; sms/fax/others never touched) only when local has no entry of that system; `address` only when local has none. Only entries that normalize are copied, as fresh objects with known string fields (no extensions); duplicates (after normalization) collapse.
+- Change actions: `filled` (origin incoming, carries `source`), `kept-local`, `skipped-duplicate`, `skipped-protected` (origin local), `skipped-invalid` (origin incoming); no entry when incoming offers nothing. `value` (the incoming value) only with `includeValues === true`.
+- Options validated like matchPatients (unknown keys, require, policy, protected paths, types). `structuredClone` is declared in `src/types/globals.d.ts` (ES2023 lib lacks it; Node >= 22 has it).
+- Session 12 adds `arrays: { telecom, address }` with `append-new` and ADR-0002; until then `arrays` is an unknown option.
+
 ## Untrusted input: bounded work (session 7 review, owner decisions)
 - The incoming record is untrusted, so no input may cause super-linear work without a bound. Measure hostile inputs (long runs, huge arrays) when adding a normalizer or comparator; quadratic code has shipped twice (phone regex, address markers).
 - Names and addresses: duplicates dropped, then at most `MAX_ENTRIES` = 10 per side compared. Jaro-Winkler on at most the first 10 tokens of a name part (set equality uses all) and only on tokens of at most 40 characters (longer: equality only). Worst case for a hostile record ~0.1 s; typical pair ~0.02 ms.
