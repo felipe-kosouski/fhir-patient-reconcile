@@ -64,7 +64,8 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | Per-field comparators (outcome, points and a reason without patient values, per field) | ✅ done |
 | `matchPatients` (weights, thresholds, vetoes, minimum evidence, FHIR `match-grade`) | ✅ done |
 | Calibration against the hard-case table: 42 of 45 pass, 3 [known limitations](#known-limitations) ([report](docs/calibration.md)) | ✅ done |
-| Property tests for matching (symmetry, determinism, no mutation) and redaction snapshot | 🚧 next |
+| Property tests for matching (symmetry, determinism, no mutation, no patient values in explanations) and an [explanation snapshot](test/unit/match/__snapshots__/explanation.json) | ✅ done |
+| npm pre-release `0.1.0-alpha.0` (tag `next`) | 🚧 next |
 | `mergePatient` (fail-closed, change report) | ⏳ planned |
 | npm release `0.1.0` with provenance | ⏳ planned |
 
@@ -218,9 +219,15 @@ How correctness is checked, not just asserted:
   (index signature, missing `| undefined`, code unions, mutable arrays) to confirm the suite
   catches it. See [ADR-0001](docs/adr/0001-own-fhir-types.md).
 - **Property-based tests** with fast-check: normalizers are idempotent, ignore formatting
-  (separators, parentheses, country codes) and never mutate input.
-  These already caught a real bug (a doubled generational suffix normalized differently on a
-  second pass), and each new property is confirmed by breaking the code on purpose.
+  (separators, parentheses, country codes) and never mutate input; `matchPatients` is symmetric,
+  deterministic, never writes to its (deep-frozen) inputs, never throws on arbitrary JSON, and
+  its explanations contain no patient text, no digits and only configured identifier systems.
+  These caught real bugs (a doubled generational suffix normalized differently on a second
+  pass; valid FHIR JSON with `null` in a name array crashed), and each property is confirmed by
+  breaking the code on purpose.
+- **What leaves the library is reviewable.** A committed
+  [snapshot](test/unit/match/__snapshots__/explanation.json) shows a full explanation by
+  default, next to the same result [with `includeValues`](test/unit/match/__snapshots__/explanation-with-values.json).
 - **Hard cases written before tuning.** The [hard-case table](test/cases/match-cases.ts) holds
   45 difficult pairs (twins, including boy/girl twins named Daniel and Daniela and twins named
   Maria Clara and Maria Eduarda, Jr. vs Sr., Filho vs Neto, married surname, swapped day and month,

@@ -13,13 +13,14 @@ export function compareContacts(
   ctx: MatchContext,
 ): FieldResult {
   const noun = field === 'phone' ? 'phone number' : 'email address';
+  const article = field === 'phone' ? 'a' : 'an';
   const values = () => ({ local: listed(a), incoming: listed(b) });
   if (a.size === 0 || b.size === 0) {
     return fieldResult(ctx, field, 'missing', `no usable ${noun} on one or both sides`, values);
   }
   const shared = first(a, (value) => b.has(value));
   if (shared !== undefined) {
-    return fieldResult(ctx, field, 'exact', `a ${noun} is shared`, () => ({
+    return fieldResult(ctx, field, 'exact', `${article} ${noun} is shared`, () => ({
       local: shared,
       incoming: shared,
     }));
@@ -28,7 +29,7 @@ export function compareContacts(
     ctx,
     field,
     'conflict',
-    `both sides have a ${noun} and none is shared`,
+    `both sides have ${article} ${noun} and none is shared`,
     values,
   );
 }

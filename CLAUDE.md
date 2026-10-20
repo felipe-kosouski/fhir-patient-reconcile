@@ -81,6 +81,10 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Grade (owner decision): `probable` only with sufficient evidence and no veto; any other `possible` is graded `possible`, whatever the points. FHIR R4 match-grade: probable = "close match… review may be required", possible = "review SHOULD be performed". Before this, all 9 probables in the table (including the three twins cases) lacked sufficient evidence.
 - When looking for false matches, think about who shares everything except one field: twins (gendered names, compound first names), parent/child (suffix, date), spouses (name). Each needs a hard case.
 
+## Session 10: properties and explanation snapshot
+- Shared generators live in `test/property/arbitraries.ts` (`patient`, `options`, `untrusted`). `match.property.test.ts`: determinism (same result on fresh copies), no mutation (deep-frozen inputs and options), no patient values (marker text never appears; explanations contain no digits outside `(system: …)`, and only configured systems), robustness on untrusted JSON. Each was confirmed by a mutant.
+- `test/unit/match/__snapshots__/explanation*.json`: a full explanation without and with `includeValues`; regenerate with `-u` and review the diff. Reading it caught "a email address".
+
 ## Untrusted input: bounded work (session 7 review, owner decisions)
 - The incoming record is untrusted, so no input may cause super-linear work without a bound. Measure hostile inputs (long runs, huge arrays) when adding a normalizer or comparator; quadratic code has shipped twice (phone regex, address markers).
 - Names and addresses: duplicates dropped, then at most `MAX_ENTRIES` = 10 per side compared. Jaro-Winkler on at most the first 10 tokens of a name part (set equality uses all) and only on tokens of at most 40 characters (longer: equality only). Worst case for a hostile record ~0.1 s; typical pair ~0.02 ms.

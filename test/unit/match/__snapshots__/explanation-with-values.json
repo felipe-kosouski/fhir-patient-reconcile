@@ -1,0 +1,86 @@
+{
+  "decision": "match",
+  "matchGrade": "certain",
+  "score": 0.7,
+  "points": 24.5,
+  "thresholds": {
+    "match": 14,
+    "possible": 8
+  },
+  "fields": [
+    {
+      "field": "identifier",
+      "outcome": "exact",
+      "points": 10,
+      "reason": "a trusted identifier is equal (system: http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf)",
+      "local": "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf|11144477735",
+      "incoming": "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf|11144477735"
+    },
+    {
+      "field": "family",
+      "outcome": "exact",
+      "points": 4,
+      "reason": "every family name on one side appears on the other",
+      "local": "silva souza",
+      "incoming": "souza"
+    },
+    {
+      "field": "given",
+      "outcome": "exact",
+      "points": 4,
+      "reason": "first given names are equal",
+      "local": "joao",
+      "incoming": "joao"
+    },
+    {
+      "field": "middle",
+      "outcome": "fuzzy",
+      "points": 0.5,
+      "reason": "a middle initial agrees",
+      "local": "pedro",
+      "incoming": "p"
+    },
+    {
+      "field": "birthDate",
+      "outcome": "fuzzy",
+      "points": 2,
+      "reason": "day and month are swapped",
+      "local": "1987-03-04",
+      "incoming": "1987-04-03"
+    },
+    {
+      "field": "phone",
+      "outcome": "exact",
+      "points": 4,
+      "reason": "a phone number is shared",
+      "local": "+5541998765432",
+      "incoming": "+5541998765432"
+    },
+    {
+      "field": "email",
+      "outcome": "conflict",
+      "points": -1,
+      "reason": "both sides have an email address and none is shared",
+      "local": "joao.souza@example.com",
+      "incoming": "jp.souza@example.com"
+    },
+    {
+      "field": "address",
+      "outcome": "fuzzy",
+      "points": 1,
+      "reason": "same postal code, different or missing street line",
+      "local": "rua das flores 100, curitiba, 80010000, BR",
+      "incoming": "rua das flores 102, 80010000, BR"
+    },
+    {
+      "field": "gender",
+      "outcome": "exact",
+      "points": 0,
+      "reason": "genders are equal",
+      "local": "male",
+      "incoming": "male"
+    }
+  ],
+  "vetoes": [],
+  "insufficientEvidence": false
+}

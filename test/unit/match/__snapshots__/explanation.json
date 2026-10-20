@@ -1,0 +1,68 @@
+{
+  "decision": "match",
+  "matchGrade": "certain",
+  "score": 0.7,
+  "points": 24.5,
+  "thresholds": {
+    "match": 14,
+    "possible": 8
+  },
+  "fields": [
+    {
+      "field": "identifier",
+      "outcome": "exact",
+      "points": 10,
+      "reason": "a trusted identifier is equal (system: http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf)"
+    },
+    {
+      "field": "family",
+      "outcome": "exact",
+      "points": 4,
+      "reason": "every family name on one side appears on the other"
+    },
+    {
+      "field": "given",
+      "outcome": "exact",
+      "points": 4,
+      "reason": "first given names are equal"
+    },
+    {
+      "field": "middle",
+      "outcome": "fuzzy",
+      "points": 0.5,
+      "reason": "a middle initial agrees"
+    },
+    {
+      "field": "birthDate",
+      "outcome": "fuzzy",
+      "points": 2,
+      "reason": "day and month are swapped"
+    },
+    {
+      "field": "phone",
+      "outcome": "exact",
+      "points": 4,
+      "reason": "a phone number is shared"
+    },
+    {
+      "field": "email",
+      "outcome": "conflict",
+      "points": -1,
+      "reason": "both sides have an email address and none is shared"
+    },
+    {
+      "field": "address",
+      "outcome": "fuzzy",
+      "points": 1,
+      "reason": "same postal code, different or missing street line"
+    },
+    {
+      "field": "gender",
+      "outcome": "exact",
+      "points": 0,
+      "reason": "genders are equal"
+    }
+  ],
+  "vetoes": [],
+  "insufficientEvidence": false
+}
