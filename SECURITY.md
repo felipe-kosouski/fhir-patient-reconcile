@@ -13,9 +13,9 @@ discussion for a suspected vulnerability.
 Include the version (or commit), a minimal reproduction and the impact you expect. **Use
 synthetic data only**: never send real patient data, not even "anonymized".
 
-This project is maintained by one person; reports are handled on a best-effort basis. You will
-get an answer in the advisory thread, and a fix will be released and credited (if you wish)
-before the advisory is made public.
+This project is maintained by one person, so reports are handled on a best-effort basis, in the
+advisory thread. The aim is to publish a fix before the advisory is made public, and to credit
+you if you wish.
 
 ## Supported versions
 

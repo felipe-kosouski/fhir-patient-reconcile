@@ -60,7 +60,8 @@ calibration report with `pnpm vitest run test/cases -u` and review its diff.
 - Values of the wrong type (null, numbers, objects) are treated as missing, never thrown on.
 - No input may cause super-linear work without a bound. Measure a new normalizer or comparator
   on hostile input (long runs of spaces, huge arrays, very long strings). A regex with adjacent
-  optional whitespace (`\s*;?\s*`) has already shipped once with cubic backtracking.
+  optional whitespace (`\s*;?\s*`) was written once already, with cubic backtracking, and
+  caught by measuring.
 - Use `Map` and `Set`, not object literals, for lookups keyed by input (`constructor` is a key).
 
 **No patient values in explanations or change reports** unless `includeValues: true`. Reasons

@@ -8,9 +8,10 @@
 [![npm next](https://img.shields.io/npm/v/fhir-patient-reconcile/next)](https://www.npmjs.com/package/fhir-patient-reconcile)
 
 > [!NOTE]
-> **Pre-release.** `0.1.0-alpha.0` is on npm under the `next` tag. Normalizers and
-> `matchPatients` are in it; `mergePatient` is on `main` and comes in the next pre-release. The
-> API may still change before `0.1.0`. See [Status](#status) for exactly what works today.
+> **Pre-release.** `0.1.0-alpha.0` is on npm under the `next` tag, with the normalizers and
+> `matchPatients`. `mergePatient` and everything else below is on `main` and comes with the next
+> release on npm. The API may still change before `0.1.0`. See [Status](#status) for exactly
+> what works today.
 
 ## The problem
 
@@ -169,9 +170,11 @@ The points are summed, and the decision follows:
 
 **Vetoes** force `no-match` (or `possible`, when an equal trusted identifier lifts the pair):
 different values for the same trusted identifier system, different generations (Filho vs Neto,
-Jr. vs Sr.; Júnior and Filho are the same generation), and birth dates in different years. `matchGrade` gives the same answer in FHIR `$match` vocabulary:
-`certain`, `probable` (a `possible` with full evidence and no veto, past the midpoint between
-the thresholds), `possible`, `certainly-not` (vetoed), or `null`.
+Jr. vs Sr.; Júnior and Filho are the same generation), and birth dates in different years.
+
+`matchGrade` gives the same answer in FHIR `$match` vocabulary: `certain`, `probable` (a
+`possible` with full evidence and no veto, past the midpoint between the thresholds),
+`possible`, `certainly-not` (vetoed), or `null`.
 
 `score` (0 to 1) is the points divided by the most a pair could score. **It is a ranking aid,
 not a probability.** The weights have the shape of a Fellegi-Sunter model (agreement > 0,
@@ -417,8 +420,9 @@ How correctness is checked, not just asserted:
   normalizer and comparator is measured on hostile input (long runs of spaces, huge arrays).
   A review found and fixed a phone regex with cubic backtracking; best-pair name and address
   matching compares at most 10 distinct entries per side.
-- **Packaging verified.** `publint --strict` and `@arethetypeswrong/cli` run in CI, and smoke
-  tests load the built package through both `import` and `require`.
+- **Packaging verified.** `publint --strict` and `@arethetypeswrong/cli` run in CI; smoke tests
+  load the built package through both `import` and `require`, and the [examples](examples/),
+  which assert every result this README shows, run against it on every Node version.
 - **Synthetic data only.** Invented names, `example.com` emails, fictional phone ranges and
   algorithmically generated CPFs. No real patient data anywhere.
 
