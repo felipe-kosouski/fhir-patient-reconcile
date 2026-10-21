@@ -16,6 +16,8 @@ import {
 import { mergeOptions, mergePair } from './arbitraries.js';
 
 type Json = Record<string, unknown>;
+/** About 180 merges and 15 appends per list path per property (see the guard test). */
+const RUNS = 300;
 const ALLOWLIST = new Set(['birthDate', 'gender', 'name', 'telecom', 'address']);
 const LIST_KEYS = ['name', 'telecom', 'address'] as const;
 /** The change-report paths, in report order. */
@@ -67,19 +69,26 @@ function appends(options: MergeOptions, path: ReportPath): boolean {
   return path.startsWith('telecom') && options.arrays?.telecom === 'append-new';
 }
 
-const merge = (local: PatientLike, incoming: PatientLike, options: MergeOptions) =>
-  mergePatient(local, incoming, options);
-
 const merged = (result: MergeResult<PatientLike>) => result.status === 'merged';
 
 describe('mergePatient: the generator forces merges', () => {
   // Without this, every property below could pass on refusals alone.
   it('most pairs merge, and every kind of write happens', () => {
     const runs = fc.sample(fc.tuple(mergePair, mergeOptions), { numRuns: 1000, seed: 42 });
-    const results = runs.map(([{ local, incoming }, options]) => merge(local, incoming, options));
+    const results = runs.map(([{ local, incoming }, options]) =>
+      mergePatient(local, incoming, options),
+    );
     const actions = new Set(results.flatMap((r) => r.changes.map((c) => c.action)));
     expect(results.filter(merged).length).toBeGreaterThan(500);
     expect(results.some((r) => r.status === 'refused')).toBe(true);
+    // Every path is written, and each list path is also appended to, often enough to matter.
+    const count = (path: string, action: string) =>
+      results.flatMap((r) => r.changes).filter((c) => c.path === path && c.action === action)
+        .length;
+    for (const path of PATHS) expect(count(path, 'filled'), `${path} filled`).toBeGreaterThan(20);
+    for (const path of ['telecom[system=phone]', 'telecom[system=email]', 'address']) {
+      expect(count(path, 'appended'), `${path} appended`).toBeGreaterThan(20);
+    }
     for (const action of [
       'filled',
       'appended',
@@ -97,12 +106,13 @@ describe('mergePatient: refusals', () => {
   it('a refused merge returns an unchanged copy of local and no changes', () => {
     fc.assert(
       fc.property(mergePair, mergeOptions, ({ local, incoming }, options) => {
-        const result = merge(local, incoming, options);
+        const result = mergePatient(local, incoming, options);
         if (result.status !== 'refused') return;
         expect(result.patient).toEqual(local);
         expect(result.patient).not.toBe(local);
         expect(result.changes).toEqual([]);
       }),
+      { numRuns: RUNS },
     );
   });
 });
@@ -111,7 +121,7 @@ describe('mergePatient: never overwrites, never removes', () => {
   it('every local element survives: lists keep their entries in front, values stay', () => {
     fc.assert(
       fc.property(mergePair, mergeOptions, ({ local, incoming }, options) => {
-        const result = json(merge(local, incoming, options).patient);
+        const result = json(mergePatient(local, incoming, options).patient);
         const before = json(local);
         for (const [key, value] of Object.entries(before)) {
           if (Array.isArray(value) && (LIST_KEYS as readonly string[]).includes(key)) {
@@ -122,31 +132,34 @@ describe('mergePatient: never overwrites, never removes', () => {
           }
         }
       }),
+      { numRuns: RUNS },
     );
   });
 
   it('writes only allowlisted elements', () => {
     fc.assert(
       fc.property(mergePair, mergeOptions, ({ local, incoming }, options) => {
-        const result = json(merge(local, incoming, options).patient);
+        const result = json(mergePatient(local, incoming, options).patient);
         for (const key of Object.keys(result)) {
           if (!ALLOWLIST.has(key)) expect(result[key], key).toEqual(json(local)[key]);
           expect(key in json(local) || ALLOWLIST.has(key), key).toBe(true);
         }
       }),
+      { numRuns: RUNS },
     );
   });
 
   it('fill-empty-only never writes where local has data; protected paths never change', () => {
     fc.assert(
       fc.property(mergePair, mergeOptions, ({ local, incoming }, options) => {
-        const result = merge(local, incoming, options).patient;
+        const result = mergePatient(local, incoming, options).patient;
         for (const path of PATHS) {
           const keep =
             protects(options, path) || (localHasData(local, path) && !appends(options, path));
           if (keep) expect(at(result, path), path).toEqual(at(local, path));
         }
       }),
+      { numRuns: RUNS },
     );
   });
 
@@ -162,9 +175,10 @@ describe('mergePatient: never overwrites, never removes', () => {
       fc.property(mergePair, mergeOptions, ({ local, incoming }, options) => {
         const before = structuredClone({ local, incoming, options });
         deepFreeze({ local, incoming, options });
-        merge(local, incoming, options);
+        mergePatient(local, incoming, options);
         expect({ local, incoming, options }).toEqual(before);
       }),
+      { numRuns: RUNS },
     );
   });
 });
@@ -173,7 +187,7 @@ describe('mergePatient: the change report', () => {
   it('filled and appended are reported exactly where the result differs from local', () => {
     fc.assert(
       fc.property(mergePair, mergeOptions, ({ local, incoming }, options) => {
-        const result = merge(local, incoming, options);
+        const result = mergePatient(local, incoming, options);
         const byPath = new Map(result.changes.map((c) => [c.path, c]));
         for (const path of PATHS) {
           const action = byPath.get(path)?.action;
@@ -181,13 +195,14 @@ describe('mergePatient: the change report', () => {
           expect(changed, `${path}: ${action}`).toBe(action === 'filled' || action === 'appended');
         }
       }),
+      { numRuns: RUNS },
     );
   });
 
   it('appended and filled entries are counted and fresh', () => {
     fc.assert(
       fc.property(mergePair, mergeOptions, ({ local, incoming }, options) => {
-        const result = merge(local, incoming, options);
+        const result = mergePatient(local, incoming, options);
         for (const change of result.changes) {
           if (change.action !== 'appended' && change.action !== 'filled') continue;
           const path = change.path as ReportPath;
@@ -206,6 +221,7 @@ describe('mergePatient: the change report', () => {
           }
         }
       }),
+      { numRuns: RUNS },
     );
   });
 
@@ -213,7 +229,7 @@ describe('mergePatient: the change report', () => {
     const fields = new Set(['path', 'action', 'origin', 'source', 'appended', 'duplicates']);
     fc.assert(
       fc.property(mergePair, mergeOptions, ({ local, incoming }, options) => {
-        const { changes } = merge(local, incoming, options);
+        const { changes } = mergePatient(local, incoming, options);
         for (const change of changes as Change[]) {
           for (const key of Object.keys(change)) {
             if (key === 'value') expect(options.includeValues).toBe(true);
@@ -224,6 +240,7 @@ describe('mergePatient: the change report', () => {
           PATHS.filter((p) => changes.some((c) => c.path === p)),
         );
       }),
+      { numRuns: RUNS },
     );
   });
 });
@@ -232,13 +249,14 @@ describe('mergePatient: idempotent', () => {
   it('merging the same incoming record again changes nothing', () => {
     fc.assert(
       fc.property(mergePair, mergeOptions, ({ local, incoming }, options) => {
-        const once = merge(local, incoming, options);
-        const twice = merge(once.patient, incoming, options);
+        const once = mergePatient(local, incoming, options);
+        const twice = mergePatient(once.patient, incoming, options);
         expect(twice.patient).toEqual(once.patient);
         const actions = twice.changes.map((c) => c.action);
         expect(actions).not.toContain('filled');
         expect(actions).not.toContain('appended');
       }),
+      { numRuns: RUNS },
     );
   });
 });

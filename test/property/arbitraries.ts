@@ -163,12 +163,14 @@ export const untrusted: fc.Arbitrary<PatientLike> = fc
 
 // --- merge pairs ---
 // Random pairs rarely match, so a merge property over them passes without merging anything.
-// Both sides start from one shared identity (name, birth date, CPF, phone); each field then
-// stays shared, goes missing, takes another valid value or turns into junk, on each side. Most
-// pairs merge (with require: 'possible'), and the ones that do not exercise refusals.
+// Both sides start from one shared identity (name, birth date, CPF, phone, email, address).
+// Each field then stays shared, gains entries, goes missing, takes another valid value or turns
+// into junk, on each side. Most pairs merge (with require: 'possible'); the rest exercise
+// refusals. The guard test in merge.property.test.ts checks those rates.
 
 const sharedName = { given: ['João'], family: 'Souza' };
 const sharedPhone = { system: 'phone', value: '(41) 99876-5432' };
+const sharedEmail = { system: 'email', value: 'joao.souza@example.com' };
 const sharedCpf = { system: RNDS_CPF_SYSTEM, value: '111.444.777-35' };
 
 /** Shared (most often), absent, another valid value, or junk. */
@@ -180,33 +182,92 @@ const varied = <T>(shared: T, other: fc.Arbitrary<unknown>) =>
     { weight: 1, arbitrary: junk },
   );
 
-const contacts = fc.array(fc.oneof(contact, fc.constant(sharedPhone)), { maxLength: 4 });
+/** Like `varied` for a list, and often the shared entries plus more, so append-new has work. */
+const listed = <T>(shared: readonly T[], entry: fc.Arbitrary<unknown>) => {
+  const more = fc.array(entry, { minLength: 1, maxLength: 3 });
+  return fc.oneof(
+    { weight: 3, arbitrary: fc.constant(shared) },
+    { weight: 3, arbitrary: more.map((extra) => [...shared, ...extra]) },
+    { weight: 2, arbitrary: fc.constant(undefined) },
+    { weight: 2, arbitrary: more },
+    { weight: 1, arbitrary: junk },
+  );
+};
+
+/** Contacts for merge pairs: mostly new numbers and addresses, plus formatting variants. */
+const mergeContact = fc.oneof(
+  {
+    weight: 4,
+    arbitrary: fc.record({
+      system: fc.constant('phone'),
+      value: fc.constantFrom(
+        '(41) 98765-4321',
+        '(21) 97654-3210',
+        '(11) 91234-5678',
+        '(41) 99999-9999',
+      ),
+    }),
+  },
+  {
+    weight: 4,
+    arbitrary: fc.record({
+      system: fc.constant('email'),
+      value: fc.constantFrom(
+        'ana@example.com',
+        'ANA@example.com',
+        'carla@example.com',
+        'noemail@example.com',
+      ),
+    }),
+  },
+  { weight: 2, arbitrary: contact },
+);
+const sharedAddress = { line: ['Rua das Flores 100'], postalCode: '80010-000' };
+const otherAddress = fc.record(
+  {
+    line: fc.constantFrom(['Rua A 10'], ['R. das Flores, nº 100'], ['Av. Brasil 2000']),
+    postalCode: fc.constantFrom('80010-000', '01310-100', '62701'),
+    city: fc.constantFrom('Curitiba', 'Recife'),
+  },
+  { requiredKeys: [] },
+);
 const side = fc
   .record({
     name: varied([sharedName], fc.array(humanName, { maxLength: 2 })),
     birthDate: varied('1987-03-14', birthDate),
-    telecom: varied([sharedPhone], contacts),
-    address: varied(undefined, fc.array(address, { maxLength: 3 })),
-    gender: varied(undefined, fc.constantFrom('male', 'female', 'other', 'unknown')),
+    telecom: listed([sharedPhone, sharedEmail], mergeContact),
+    address: listed([sharedAddress], otherAddress),
+    gender: varied('male', fc.constantFrom('female', 'other', 'unknown')),
   })
   .map((fields) => {
     const result: Record<string, unknown> = { resourceType: 'Patient', identifier: [sharedCpf] };
     for (const [key, value] of Object.entries(fields)) if (value !== undefined) result[key] = value;
-    return result;
+    // Fresh objects per side: local and incoming must never share an instance, or a merge that
+    // compared entries by identity would find "duplicates" by accident.
+    return structuredClone(result);
   });
 
+/** Sometimes (1 in `odds`) a value, otherwise absent. */
+const sometimes = <T>(value: T, odds = 2) =>
+  fc.oneof(
+    { weight: 1, arbitrary: fc.constant(value) },
+    { weight: odds - 1, arbitrary: fc.constant(undefined) },
+  );
+
 /** Elements outside the merge allowlist, on the local side: a merge must never touch them. */
-const outsideAllowlist = fc.record(
-  {
-    id: fc.constant('local-1'),
-    meta: fc.constant({ versionId: '3', tag: [{ code: 'reviewed' }] }),
-    active: fc.boolean(),
-    extension: fc.constant([{ url: 'urn:example:local', valueString: 'x' }]),
-    _birthDate: fc.constant({ extension: [{ url: 'urn:example:data-absent-reason' }] }),
-    link: fc.constant([{ other: { reference: 'Patient/9' }, type: 'seealso' }]),
-  },
-  { requiredKeys: [] },
-);
+const outsideAllowlist = fc
+  .record({
+    id: sometimes('local-1'),
+    meta: sometimes({ versionId: '3', tag: [{ code: 'reviewed' }] }),
+    active: sometimes(true),
+    extension: sometimes([{ url: 'urn:example:local', valueString: 'x' }]),
+    // Rare: it blocks birthDate, which would otherwise hardly ever be filled.
+    _birthDate: sometimes({ extension: [{ url: 'urn:example:data-absent-reason' }] }, 5),
+    link: sometimes([{ other: { reference: 'Patient/9' }, type: 'seealso' }]),
+  })
+  .map((fields) =>
+    structuredClone(Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined))),
+  );
 
 export const mergePair: fc.Arbitrary<{ local: PatientLike; incoming: PatientLike }> = fc
   .record({ local: side, incoming: side, extra: outsideAllowlist })
@@ -230,7 +291,11 @@ const arrayPolicy = fc.constantFrom('fill-empty-only', 'append-new' as const);
 export const mergeOptions: fc.Arbitrary<MergeOptions> = fc.record(
   {
     require: fc.constantFrom('possible', 'possible', 'possible', 'match', undefined),
-    protectedPaths: fc.subarray(mergePaths),
+    // Mostly none: a random subset protects half the paths and hides every other action.
+    protectedPaths: fc.oneof(
+      { weight: 3, arbitrary: fc.constant([]) },
+      { weight: 1, arbitrary: fc.subarray(mergePaths, { maxLength: 2 }) },
+    ),
     arrays: fc.record({ telecom: arrayPolicy, address: arrayPolicy }, { requiredKeys: [] }),
     source: fc.constant('hie:example'),
     includeValues: fc.boolean(),

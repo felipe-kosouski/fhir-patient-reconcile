@@ -68,7 +68,7 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | npm pre-release `0.1.0-alpha.0` (tag `next`) | ✅ done |
 | `mergePatient`: fail-closed precondition, allowlist, `fill-empty-only`, protected paths, change report | ✅ done |
 | `mergePatient` array policies (`append-new` for phones, emails and addresses) and [ADR-0002](docs/adr/0002-fail-closed-merge.md) (fail-closed design) | ✅ done |
-| Property tests for merging (never overwrites, never removes, idempotent, refusal = unchanged copy); coverage ≥ 90% enforced for matching and merging (today ~99%) | ✅ done |
+| Property tests for merging (never overwrites, never removes, idempotent, refusal = unchanged copy); coverage ≥ 90% enforced for matching and merging | ✅ done |
 | Final docs: examples, CONTRIBUTING, SECURITY | 🚧 next |
 | npm release `0.1.0` with provenance | ⏳ planned |
 
