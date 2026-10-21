@@ -1,6 +1,6 @@
 {
   "name": "fhir-patient-reconcile",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0",
   "description": "Explainable matching and fail-closed merging of FHIR R4 Patient resources.",
   "keywords": [
     "fhir",
