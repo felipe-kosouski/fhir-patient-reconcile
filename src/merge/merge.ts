@@ -2,14 +2,21 @@ import { type MatchContext, resolveContext } from '../match/context.js';
 import { matchPatients } from '../match/match.js';
 import { MAX_ENTRIES } from '../match/prepare.js';
 import type { MatchOptions, MatchResult } from '../match/types.js';
-import { normalizeAddress } from '../normalize/address.js';
+import { type NormalizedAddress, normalizeAddress } from '../normalize/address.js';
 import { normalizeBirthDate } from '../normalize/date.js';
 import { normalizeEmail } from '../normalize/email.js';
 import { normalizeName } from '../normalize/name.js';
 import { strings } from '../normalize/text.js';
 import type { AddressLike, ContactPointLike, HumanNameLike, PatientLike } from '../types/fhir.js';
 import { objects, requireKnownKeys } from '../util/input.js';
-import type { Change, MergeOptions, MergePath, MergeResult } from './types.js';
+import type {
+  ArrayPolicies,
+  ArrayPolicy,
+  Change,
+  MergeOptions,
+  MergePath,
+  MergeResult,
+} from './types.js';
 
 const KNOWN_OPTIONS: Readonly<Record<keyof MergeOptions, true>> = {
   match: true,
@@ -17,6 +24,7 @@ const KNOWN_OPTIONS: Readonly<Record<keyof MergeOptions, true>> = {
   require: true,
   policy: true,
   protectedPaths: true,
+  arrays: true,
   source: true,
   includeValues: true,
 };
@@ -31,6 +39,8 @@ const MERGE_PATHS: ReadonlySet<string> = new Set<MergePath>([
   'address',
 ]);
 
+const ARRAY_PATHS: Readonly<Record<keyof ArrayPolicies, true>> = { telecom: true, address: true };
+
 /** Gender codes worth writing; `unknown` carries no information. */
 const WRITABLE_GENDERS: ReadonlySet<string> = new Set(['male', 'female', 'other']);
 
@@ -38,14 +48,15 @@ const WRITABLE_GENDERS: ReadonlySet<string> = new Set(['male', 'female', 'other'
 interface Writable {
   birthDate?: string;
   gender?: string;
-  name?: HumanNameLike[];
+  name?: unknown;
   telecom?: unknown;
-  address?: AddressLike[];
+  address?: unknown;
 }
 
 interface Settings {
   require: 'match' | 'possible';
   protectedPaths: ReadonlySet<string>;
+  arrays: Required<{ [K in keyof ArrayPolicies]: ArrayPolicy }>;
   source: string | undefined;
   includeValues: boolean;
   matchOptions: MatchOptions | undefined;
@@ -64,6 +75,9 @@ interface Settings {
  *   phones and emails in `telecom` (per system, when local has none of that system) and
  *   `address` (when local has none). Only valid incoming entries are copied, with their known
  *   fields; extensions and every other element of either record are left alone.
+ * - `arrays: { telecom: 'append-new' }` (or `address`): when the local record already has
+ *   entries there, new incoming ones are added after them. "New" means not already local after
+ *   normalization (an address: same postal code and street line). Local entries never change.
  * - `protectedPaths` are never written.
  *
  * Never mutates its inputs and never removes data. A refused merge returns an unchanged copy of
@@ -115,6 +129,7 @@ function resolveSettings(options: MergeOptions): Settings {
       );
     }
   }
+  const arrays = resolveArrays(options.arrays);
   if (source !== undefined && typeof source !== 'string') {
     throw new TypeError('source must be a string');
   }
@@ -127,10 +142,29 @@ function resolveSettings(options: MergeOptions): Settings {
   return {
     require,
     protectedPaths: new Set(protectedPaths),
+    arrays,
     source,
     includeValues: options.includeValues === true,
     matchOptions: options.matchOptions,
   };
+}
+
+function resolveArrays(arrays: ArrayPolicies | undefined): Settings['arrays'] {
+  if (arrays === undefined) return { telecom: 'fill-empty-only', address: 'fill-empty-only' };
+  if (typeof arrays !== 'object' || arrays === null || Array.isArray(arrays)) {
+    throw new TypeError('arrays must be an object');
+  }
+  requireKnownKeys(arrays, ARRAY_PATHS, 'arrays');
+  const policy = (path: keyof ArrayPolicies): ArrayPolicy => {
+    const value = arrays[path] ?? 'fill-empty-only';
+    if (value !== 'fill-empty-only' && value !== 'append-new') {
+      throw new RangeError(
+        `arrays.${path} must be 'fill-empty-only' or 'append-new', got ${String(value)}`,
+      );
+    }
+    return value;
+  };
+  return { telecom: policy('telecom'), address: policy('address') };
 }
 
 function refusalReason(
@@ -173,17 +207,18 @@ function sameResult(given: MatchResult, match: MatchResult): boolean {
 interface Offer<T> {
   /** The incoming record has something at this path (valid or not). */
   present: boolean;
-  /** The value to write, when the incoming one is valid. */
+  /** The value to write: valid, and (for lists) not already in the local record. */
   valid: T | undefined;
-  /** The valid incoming value is already in the local record (after normalization). */
+  /** Every valid incoming value is already in the local record (after normalization). */
   duplicate: boolean;
   /** The incoming value as given, for `includeValues`. */
   raw: unknown;
 }
 
 /**
- * The fill-empty-only decision for one path, in order: nothing offered, protected, local has
- * data (duplicate or kept), invalid, filled. Calls `write` only for `filled`.
+ * The decision for one path, in order: nothing offered, protected, local has data (duplicate or
+ * kept), invalid, written. Calls `write` only when it writes; `written` names that action
+ * (`appended` when append-new adds to local entries, which then do not count as data here).
  */
 function decide<T>(
   path: string,
@@ -192,11 +227,12 @@ function decide<T>(
   offer: Offer<T>,
   settings: Settings,
   write: (value: T) => void,
+  written: 'filled' | 'appended' = 'filled',
 ): Change | undefined {
   if (!offer.present) return undefined;
   const change = (action: Change['action'], origin: Change['origin']): Change => {
     const result: Change = { path, action, origin };
-    if (action === 'filled' && settings.source !== undefined) result.source = settings.source;
+    if (action === written && settings.source !== undefined) result.source = settings.source;
     if (settings.includeValues) result.value = offer.valid ?? offer.raw;
     return result;
   };
@@ -206,7 +242,7 @@ function decide<T>(
   if (localPresent) return change(offer.duplicate ? 'skipped-duplicate' : 'kept-local', 'local');
   if (offer.valid === undefined) return change('skipped-invalid', 'incoming');
   write(offer.valid);
-  return change('filled', 'incoming');
+  return change(written, 'incoming');
 }
 
 function mergeBirthDate(
@@ -256,21 +292,17 @@ function mergeNames(
   incoming: PatientLike,
   settings: Settings,
 ): Change | undefined {
-  const key = (n: HumanNameLike) => {
-    const normalized = normalizeName(n);
-    return normalized === undefined ? undefined : JSON.stringify(normalized);
-  };
   return mergeList(
     {
       path: 'name',
       protectedBy: ['name'],
-      local: objects(local.name),
-      localPresent: presentArray(local.name),
+      policy: 'fill-empty-only', // names are never appended: two names are not more information
+      local: local.name,
       incoming: objects(incoming.name),
-      key,
+      normalize: (n: HumanNameLike) => jsonOf(normalizeName(n)),
       copy: copyName,
-      write: (names) => {
-        target.name = names;
+      write: (added) => {
+        target.name = appended(target.name, added);
       },
     },
     settings,
@@ -285,27 +317,23 @@ function mergeTelecom(
   system: 'phone' | 'email',
   ctx: MatchContext,
 ): Change | undefined {
-  const ofSystem = (telecom: PatientLike['telecom']) =>
-    objects(telecom).filter((c) => c.system === system);
-  const key = ({ value }: ContactPointLike) => {
-    if (typeof value !== 'string') return undefined;
-    return system === 'phone' ? ctx.phone(value) : normalizeEmail(value);
-  };
+  const ofSystem = (telecom: readonly ContactPointLike[]) =>
+    telecom.filter((c) => c.system === system);
   return mergeList(
     {
       path: `telecom[system=${system}]`,
       protectedBy: ['telecom', system === 'phone' ? 'telecom.phone' : 'telecom.email'],
-      local: ofSystem(local.telecom),
-      // A local telecom that is not an array is data we cannot extend without replacing it.
-      localPresent:
-        ofSystem(local.telecom).length > 0 ||
-        (local.telecom !== undefined && !Array.isArray(local.telecom)),
-      incoming: ofSystem(incoming.telecom),
-      key,
+      policy: settings.arrays.telecom,
+      // Entries of other systems are not data for this path; a non-array telecom is.
+      local: Array.isArray(local.telecom) ? ofSystem(objects(local.telecom)) : local.telecom,
+      incoming: ofSystem(objects(incoming.telecom)),
+      normalize: ({ value }: ContactPointLike) => {
+        if (typeof value !== 'string') return undefined;
+        return system === 'phone' ? ctx.phone(value) : normalizeEmail(value);
+      },
       copy: copyContactPoint,
       write: (added) => {
-        const current = Array.isArray(target.telecom) ? (target.telecom as unknown[]) : [];
-        target.telecom = [...current, ...added];
+        target.telecom = appended(target.telecom, added);
       },
     },
     settings,
@@ -318,68 +346,131 @@ function mergeAddresses(
   incoming: PatientLike,
   settings: Settings,
 ): Change | undefined {
-  const key = (a: AddressLike) => {
-    const normalized = normalizeAddress(a);
-    return normalized === undefined ? undefined : JSON.stringify(normalized);
-  };
   return mergeList(
     {
       path: 'address',
       protectedBy: ['address'],
-      local: objects(local.address),
-      localPresent: presentArray(local.address),
+      policy: settings.arrays.address,
+      local: local.address,
       incoming: objects(incoming.address),
-      key,
+      normalize: normalizeAddress,
+      same: sameAddress,
       copy: copyAddress,
-      write: (addresses) => {
-        target.address = addresses;
+      write: (added) => {
+        target.address = appended(target.address, added);
       },
     },
     settings,
   );
 }
 
-/** One list path (names, phones, emails, addresses) of a fill-empty-only merge. */
-interface ListPath<T extends object> {
+/**
+ * The same place for a merge: same postal code and street line. Without a postal code on one
+ * side, the same line (or, with no line, the same city) and no city that differs. A near copy
+ * that only adds or reformats a city or state is not new information.
+ */
+function sameAddress(a: NormalizedAddress, b: NormalizedAddress): boolean {
+  if (a.country !== undefined && b.country !== undefined && a.country !== b.country) return false;
+  if (a.line !== b.line) return false;
+  if (a.postalCode !== undefined && b.postalCode !== undefined) {
+    return a.postalCode === b.postalCode;
+  }
+  if (a.line === undefined) return a.city === b.city;
+  return a.city === undefined || b.city === undefined || a.city === b.city;
+}
+
+/** One list path (names, phones, emails, addresses). */
+interface ListPath<T extends object, N> {
   path: string;
   protectedBy: readonly MergePath[];
-  /** Local entries of this kind, for duplicate detection. */
-  local: readonly T[];
-  /** The local record has data here (fill-empty-only never writes then). */
-  localPresent: boolean;
+  policy: ArrayPolicy;
+  /** The local value at this path, as stored: entries of this kind, or anything else. */
+  local: unknown;
   incoming: readonly T[];
-  /** Identity after normalization; `undefined` when the entry is unusable. */
-  key: (entry: T) => string | undefined;
+  /** The entry after normalization; `undefined` when it is unusable. */
+  normalize: (entry: T) => N | undefined;
+  /** When two normalized entries are the same. Default: `===` (a `Set` lookup). */
+  same?: (a: N, b: N) => boolean;
   /** A fresh copy of the known fields; `undefined` when a field is too long. */
   copy: (entry: T) => T | undefined;
+  /** Adds entries after the ones already there. */
   write: (entries: T[]) => void;
 }
 
 /**
- * Valid incoming entries, distinct after normalization and at most `MAX_ENTRIES` (the incoming
- * record is untrusted: 100,000 emails must not become 100,000 local entries).
+ * The first `MAX_ENTRIES` valid incoming entries, distinct after normalization (the incoming
+ * record is untrusted: 100,000 emails must not become 100,000 local entries), minus those
+ * already in the local record. Local entries are only read, so the work is linear in their
+ * number (times at most `MAX_ENTRIES` for a `same` function).
  */
-function mergeList<T extends object>(spec: ListPath<T>, settings: Settings): Change | undefined {
-  const keys = new Set<string>();
-  const valid: T[] = [];
+function mergeList<T extends object, N>(
+  spec: ListPath<T, N>,
+  settings: Settings,
+): Change | undefined {
+  const same = spec.same ?? ((a: N, b: N) => a === b);
+  const chosen: N[] = [];
+  const copies: T[] = [];
   for (const entry of spec.incoming) {
-    if (valid.length === MAX_ENTRIES) break;
-    const key = spec.key(entry);
-    if (key === undefined || keys.has(key)) continue;
+    if (chosen.length === MAX_ENTRIES) break;
+    const normalized = spec.normalize(entry);
+    if (normalized === undefined || chosen.some((c) => same(c, normalized))) continue;
     const copy = spec.copy(entry);
     if (copy === undefined) continue;
-    keys.add(key);
-    valid.push(copy);
+    chosen.push(normalized);
+    copies.push(copy);
   }
-  const localKeys = new Set(spec.local.map(spec.key));
+
+  const localEntries = Array.isArray(spec.local) ? objects<T>(spec.local) : [];
+  const isLocal = membership(localEntries.map(spec.normalize), spec.same);
+  const fresh = copies.filter((_, k) => !isLocal(chosen[k] as N));
   const offer: Offer<T[]> = {
     present: spec.incoming.length > 0,
-    valid: valid.length > 0 ? valid : undefined,
-    duplicate: valid.length > 0 && [...keys].every((key) => localKeys.has(key)),
+    valid: fresh.length > 0 ? fresh : undefined,
+    duplicate: copies.length > 0 && fresh.length === 0,
     // Echoed only with includeValues; bounded like the copies.
     raw: spec.incoming.slice(0, MAX_ENTRIES),
   };
-  return decide(spec.path, spec.protectedBy, spec.localPresent, offer, settings, spec.write);
+
+  const localPresent = presentArray(spec.local);
+  // append-new extends a local array; a local value that is not an array is kept as it is.
+  const appending =
+    localPresent && spec.policy === 'append-new' && Array.isArray(spec.local) && fresh.length > 0;
+  const result = decide(
+    spec.path,
+    spec.protectedBy,
+    localPresent && !appending,
+    offer,
+    settings,
+    spec.write,
+    appending ? 'appended' : 'filled',
+  );
+  if (result?.action === 'appended') {
+    result.appended = fresh.length;
+    result.duplicates = copies.length - fresh.length;
+  }
+  return result;
+}
+
+/** Membership among normalized local entries: a `Set` for `===`, a scan for `same`. */
+function membership<N>(
+  values: readonly (N | undefined)[],
+  same: ((a: N, b: N) => boolean) | undefined,
+): (value: N) => boolean {
+  const known = values.filter((v): v is N => v !== undefined);
+  if (same === undefined) {
+    const set = new Set(known);
+    return (value) => set.has(value);
+  }
+  return (value) => known.some((k) => same(k, value));
+}
+
+/** `current` (when it is an array) followed by `added`: a merge never drops what is there. */
+function appended(current: unknown, added: readonly unknown[]): unknown[] {
+  return [...(Array.isArray(current) ? current : []), ...added];
+}
+
+function jsonOf(value: object | undefined): string | undefined {
+  return value === undefined ? undefined : JSON.stringify(value);
 }
 
 // --- reading and copying untrusted input ---

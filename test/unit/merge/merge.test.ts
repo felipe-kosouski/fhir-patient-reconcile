@@ -353,6 +353,203 @@ describe('mergePatient: protected paths', () => {
   });
 });
 
+describe('mergePatient: append-new', () => {
+  const base: Fields = {
+    name: [{ given: ['João'], family: 'Souza' }],
+    birthDate: '1987-03-14',
+    telecom: [phone('(41) 99876-5432')],
+  };
+  const appendNew: MergeOptions = {
+    require: 'possible',
+    arrays: { telecom: 'append-new', address: 'append-new' },
+  };
+  const merge = (l: Fields, i: Fields, options: MergeOptions = appendNew) => {
+    const result = mergePatient(patient({ ...base, ...l }), patient({ ...base, ...i }), options);
+    expect(result.status, result.status === 'refused' ? result.reason : '').toBe('merged');
+    return result;
+  };
+
+  it('adds new phones after the local ones and skips the ones already there', () => {
+    const result = merge(
+      { telecom: [phone('(41) 99876-5432'), { system: 'fax', value: '(41) 3333-4444' }] },
+      {
+        telecom: [
+          phone('+55 41 99876 5432'), // the local phone, written another way
+          phone('(41) 98765-4321'),
+          phone('41987654321'), // the new phone again
+          phone('not a phone'),
+        ],
+      },
+      { ...appendNew, source: 'hie:example' },
+    );
+    expect(change(result.changes, 'telecom[system=phone]')).toEqual({
+      path: 'telecom[system=phone]',
+      action: 'appended',
+      origin: 'incoming',
+      source: 'hie:example',
+      appended: 1,
+      duplicates: 1,
+    });
+    expect(result.patient.telecom).toEqual([
+      phone('(41) 99876-5432'),
+      { system: 'fax', value: '(41) 3333-4444' },
+      phone('(41) 98765-4321'),
+    ]);
+  });
+
+  it.each<[string, Fields, Change['action'] | undefined]>([
+    [
+      'every incoming phone is already local: duplicate',
+      { telecom: [phone('41 99876 5432')] },
+      'skipped-duplicate',
+    ],
+    [
+      'the local phone plus an invalid one: duplicate',
+      { telecom: [...(base.telecom ?? []), phone('(41) 0000-0000')] },
+      'skipped-duplicate',
+    ],
+    ['nothing offered: nothing to report', { telecom: [] }, undefined],
+  ])('%s', (_, i, action) => {
+    expect(change(merge({}, i).changes, 'telecom[system=phone]')?.action).toBe(action);
+  });
+
+  it('an email system with nothing local is filled, as with fill-empty-only', () => {
+    const result = merge({}, { telecom: [...(base.telecom ?? []), email('a@example.com')] });
+    expect(change(result.changes, 'telecom[system=email]')).toEqual({
+      path: 'telecom[system=email]',
+      action: 'filled',
+      origin: 'incoming',
+    });
+  });
+
+  it('only invalid entries offered next to local ones: kept-local', () => {
+    const result = merge(
+      { telecom: [...(base.telecom ?? []), email('a@example.com')] },
+      { telecom: [...(base.telecom ?? []), email('not-an-email')] },
+    );
+    expect(change(result.changes, 'telecom[system=email]')?.action).toBe('kept-local');
+  });
+
+  it('is off by default and per path', () => {
+    const i: Fields = {
+      telecom: [phone('(41) 99876-5432'), phone('(41) 98765-4321')],
+      address: [{ line: ['Rua A 10'], postalCode: '01310-100' }],
+    };
+    const l: Fields = { address: [{ line: ['Rua B 20'], postalCode: '80010-000' }] };
+    const plain = merge(l, i, { require: 'possible' });
+    expect(change(plain.changes, 'telecom[system=phone]')?.action).toBe('kept-local');
+    expect(change(plain.changes, 'address')?.action).toBe('kept-local');
+    const addressOnly = merge(l, i, { require: 'possible', arrays: { address: 'append-new' } });
+    expect(change(addressOnly.changes, 'telecom[system=phone]')?.action).toBe('kept-local');
+    expect(change(addressOnly.changes, 'address')?.action).toBe('appended');
+  });
+
+  it('protected paths win over append-new', () => {
+    const i: Fields = { telecom: [phone('(41) 99876-5432'), phone('(41) 98765-4321')] };
+    for (const path of ['telecom', 'telecom.phone'] as const) {
+      const result = merge({}, i, { ...appendNew, protectedPaths: [path] });
+      expect(change(result.changes, 'telecom[system=phone]')?.action).toBe('skipped-protected');
+      expect(result.patient.telecom).toEqual(base.telecom);
+    }
+  });
+
+  it('a local telecom that is not an array is kept as it is', () => {
+    const l = {
+      ...patient(base),
+      telecom: { system: 'phone', value: 'x' },
+    } as unknown as PatientLike;
+    const result = mergePatient(
+      l,
+      patient({ ...base, telecom: [phone('(41) 98765-4321')] }),
+      appendNew,
+    );
+    expect(result.patient.telecom).toEqual({ system: 'phone', value: 'x' });
+  });
+
+  it.each<[string, Record<string, unknown>, Change['action']]>([
+    [
+      'same postal code and line, other spelling',
+      { line: ['R. das Flores, nº 100'], postalCode: '80010000' },
+      'skipped-duplicate',
+    ],
+    [
+      'same postal code and line, plus a city',
+      { line: ['Rua das Flores 100'], city: 'Curitiba', postalCode: '80010-000' },
+      'skipped-duplicate',
+    ],
+    ['same line, no postal code', { line: ['Rua das Flores 100'] }, 'skipped-duplicate'],
+    [
+      'same postal code, other line',
+      { line: ['Rua das Flores 200'], postalCode: '80010-000' },
+      'appended',
+    ],
+    [
+      'other postal code, same line',
+      { line: ['Rua das Flores 100'], postalCode: '01310-100' },
+      'appended',
+    ],
+    [
+      'same line in another city, no postal code',
+      { line: ['Rua das Flores 100'], city: 'Recife' },
+      'appended',
+    ],
+    [
+      'another country',
+      { line: ['Rua das Flores 100'], postalCode: '80010-000', country: 'US' },
+      'appended',
+    ],
+  ])('address: %s is %s', (_, address, action) => {
+    const l: Fields = {
+      address: [{ line: ['Rua das Flores 100'], city: 'Curitiba', postalCode: '80010-000' }],
+    };
+    const result = merge(l, { address: [address as never] });
+    expect(change(result.changes, 'address')?.action).toBe(action);
+    if (action === 'appended') expect(result.patient.address).toHaveLength(2);
+    else expect(result.patient.address).toEqual(l.address);
+  });
+
+  it('adds at most 10 new entries per path, whatever local holds', () => {
+    const emails = Array.from({ length: 1000 }, (_, k) => email(`p${k}@example.com`));
+    const result = merge(
+      { telecom: [...(base.telecom ?? []), email('local@example.com')] },
+      { telecom: [...(base.telecom ?? []), ...emails] },
+    );
+    const added = (result.patient.telecom ?? []).filter((c) => c.system === 'email');
+    expect(added.map((c) => c.value)).toEqual([
+      'local@example.com',
+      ...emails.slice(0, 10).map((c) => c.value),
+    ]);
+  });
+
+  it('with includeValues, the value is what was appended', () => {
+    const result = merge(
+      {},
+      { telecom: [phone('(41) 99876-5432'), phone('(41) 98765-4321')] },
+      { ...appendNew, includeValues: true },
+    );
+    expect(change(result.changes, 'telecom[system=phone]')?.value).toEqual([
+      phone('(41) 98765-4321'),
+    ]);
+  });
+
+  it('merging the result again changes nothing', () => {
+    const i = patient({
+      ...base,
+      telecom: [phone('(41) 98765-4321'), email('a@example.com')],
+      address: [{ line: ['Rua A 10'], postalCode: '01310-100' }],
+    });
+    const once = mergePatient(
+      patient({ ...base, address: [{ line: ['Rua B 20'], postalCode: '80010-000' }] }),
+      i,
+      appendNew,
+    );
+    const twice = mergePatient(once.patient, i, appendNew);
+    expect(twice.patient).toEqual(once.patient);
+    expect(twice.changes.map((c) => c.action)).not.toContain('appended');
+    expect(twice.changes.map((c) => c.action)).not.toContain('filled');
+  });
+});
+
 describe('mergePatient: the allowlist', () => {
   it('touches nothing outside it, on either record', () => {
     const l = {
@@ -421,6 +618,10 @@ describe('mergePatient: options', () => {
     ['an unknown protected path', { protectedPaths: ['birthdate'] }, RangeError],
     ['protected paths that are not an array', { protectedPaths: 'telecom' }, TypeError],
     ['a source that is not a string', { source: 42 }, TypeError],
+    ['arrays that is not an object', { arrays: 'append-new' }, TypeError],
+    ['arrays given as a list', { arrays: ['telecom'] }, TypeError],
+    ['an array policy for another path', { arrays: { name: 'append-new' } }, RangeError],
+    ['an unknown array policy', { arrays: { telecom: 'append' } }, RangeError],
     ['a match that is not an object', { match: 'match' }, TypeError],
     ['invalid match options', { matchOptions: { thresholds: { match: Number.NaN } } }, RangeError],
   ])('rejects %s', (_, options, error) => {

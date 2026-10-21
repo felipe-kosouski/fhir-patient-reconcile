@@ -95,7 +95,14 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Review (owner decisions): a merge copies at most `MAX_ENTRIES` (10) entries per path, distinct after normalization; a copied name/address/contact entry with a text field over 1,000 characters is invalid; `normalizeEmail` rejects addresses over 254 characters (RFC 5321). Before this, 100,000 incoming emails became 100,000 local entries. Name, phone, email and address paths share `mergeList`.
 - Second review: any local value that is not null/undefined counts as present, whatever its type (a numeric birth date, an object gender, a blank string were overwritten before). With `includeValues`, an invalid list offer echoes at most 10 entries.
 - For session 13's merge properties: random pairs rarely reach a merge, so a property must **force** merges (shared base record plus one varied field), or it passes without testing anything. The overwrite bug above survived 3,000 random pairs and failed at once with a forced generator.
-- Session 12 adds `arrays: { telecom, address }` with `append-new` and ADR-0002; until then `arrays` is an unknown option.
+
+## append-new (session 12, owner decisions)
+- `arrays: { telecom?, address? }` (`ArrayPolicy` = `fill-empty-only` | `append-new`, default fill-empty-only). Names are never appended. Protected paths beat `arrays`.
+- An address is a duplicate of another when they have the same postal code + street line; without a postal code on one side, the same line (or, with no line, the same city) and no city that differs. Countries that differ are never duplicates. The same `sameAddress` rule also dedupes incoming addresses and labels fill-empty-only duplicates. Phones/emails/names compare normalized keys with a `Set`.
+- One change per path: `appended` (origin incoming, `source`, `appended` and `duplicates` counts, `value` = the appended entries) when at least one entry is new; `skipped-duplicate` when all valid ones are local; `kept-local` when only invalid ones are offered or local is not an array; `filled` when local had none.
+- At most 10 new entries per path: the first 10 distinct valid incoming entries, minus those already local. Local work is linear (x10 for addresses).
+- Writes always append to the local array (never replace), so even a `[null]` local list is kept.
+- ADR-0002 (`docs/adr/0002-fail-closed-merge.md`) records the whole merge design.
 
 ## Untrusted input: bounded work (session 7 review, owner decisions)
 - The incoming record is untrusted, so no input may cause super-linear work without a bound. Measure hostile inputs (long runs, huge arrays) when adding a normalizer or comparator; quadratic code has shipped twice (phone regex, address markers).

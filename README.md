@@ -67,7 +67,8 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | Property tests for matching (symmetry, determinism, no mutation, no patient values in explanations) and an [explanation snapshot](test/unit/match/__snapshots__/explanation.json) | ✅ done |
 | npm pre-release `0.1.0-alpha.0` (tag `next`) | ✅ done |
 | `mergePatient`: fail-closed precondition, allowlist, `fill-empty-only`, protected paths, change report | ✅ done |
-| `mergePatient` array policies (`append-new`) and ADR-0002 (fail-closed design) | 🚧 next |
+| `mergePatient` array policies (`append-new` for phones, emails and addresses) and [ADR-0002](docs/adr/0002-fail-closed-merge.md) (fail-closed design) | ✅ done |
+| Property tests for merging (never overwrites, never removes, idempotent) | 🚧 next |
 | npm release `0.1.0` with provenance | ⏳ planned |
 
 ## What works today
@@ -140,7 +141,21 @@ mergePatient(local, twin, { matchOptions }).status;
 
 mergePatient(local, incoming, { matchOptions, protectedPaths: ['telecom'] }).changes.at(-1);
 // { path: 'telecom[system=email]', action: 'skipped-protected', origin: 'local' }
+
+// Opt in to also add new phones, emails and addresses when local already has some.
+// Entries already in local (after normalization) are not added again.
+const newPhone = {
+  ...incoming,
+  telecom: [...incoming.telecom, { system: 'phone', value: '(41) 98765-4321' }],
+} as const;
+const appended = mergePatient(local, newPhone, { matchOptions, arrays: { telecom: 'append-new' } });
+appended.changes.find((c) => c.path === 'telecom[system=phone]');
+// { path: 'telecom[system=phone]', action: 'appended', origin: 'incoming', appended: 1, duplicates: 1 }
+appended.patient.telecom?.map((c) => c.value);
+// ['(41) 99876-5432', '(41) 98765-4321', 'joao.souza@example.com']
 ```
+
+Why each rule is there: [ADR-0002](docs/adr/0002-fail-closed-merge.md).
 
 Building blocks, also exported:
 
@@ -215,16 +230,6 @@ damerauLevenshtein('CA', 'ABC');
   merge copies at most 10 entries per path; text over 1,000 characters is not copied.
 
 See the [calibration report](docs/calibration.md) for every case.
-
-## Planned API (v0.1)
-
-Not implemented yet: array policies for `mergePatient` (session 12).
-
-```ts
-mergePatient(local, incoming, {
-  arrays: { telecom: 'append-new' }, // also add new phones and emails when local already has some
-});
-```
 
 ## Engineering notes
 

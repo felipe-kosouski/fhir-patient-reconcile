@@ -17,6 +17,8 @@ export {
   type Veto,
 } from './match/index.js';
 export {
+  type ArrayPolicies,
+  type ArrayPolicy,
   type Change,
   type ChangeAction,
   type MergeOptions,

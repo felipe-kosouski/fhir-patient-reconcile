@@ -4,6 +4,7 @@
 import { describe, expectTypeOf, it } from 'vitest';
 import type {
   AddressLike,
+  ArrayPolicies,
   CodeableConceptLike,
   CodingLike,
   ContactPointLike,
@@ -58,8 +59,9 @@ describe('every optional property is `?: T | undefined`', () => {
     expectTypeOf<OptionalsAcceptUndefined<FieldWeightOverrides>>().toEqualTypeOf<true>();
   });
 
-  it('on MergeOptions', () => {
+  it('on MergeOptions and its nested objects', () => {
     expectTypeOf<OptionalsAcceptUndefined<MergeOptions>>().toEqualTypeOf<true>();
+    expectTypeOf<OptionalsAcceptUndefined<ArrayPolicies>>().toEqualTypeOf<true>();
   });
 });
 
