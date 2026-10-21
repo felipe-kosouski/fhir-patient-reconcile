@@ -56,7 +56,7 @@ interface Writable {
 interface Settings {
   require: 'match' | 'possible';
   protectedPaths: ReadonlySet<string>;
-  arrays: Required<{ [K in keyof ArrayPolicies]: ArrayPolicy }>;
+  arrays: Record<keyof ArrayPolicies, ArrayPolicy>;
   source: string | undefined;
   includeValues: boolean;
   matchOptions: MatchOptions | undefined;
@@ -216,14 +216,14 @@ interface Offer<T> {
 }
 
 /**
- * The decision for one path, in order: nothing offered, protected, local has data (duplicate or
- * kept), invalid, written. Calls `write` only when it writes; `written` names that action
- * (`appended` when append-new adds to local entries, which then do not count as data here).
+ * The decision for one path, in order: nothing offered, protected, local data blocks the write
+ * (duplicate or kept), invalid, written. Calls `write` only when it writes; `written` names that
+ * action (`appended` when append-new adds after local entries, which then do not block).
  */
 function decide<T>(
   path: string,
   protectedBy: readonly MergePath[],
-  localPresent: boolean,
+  localBlocks: boolean,
   offer: Offer<T>,
   settings: Settings,
   write: (value: T) => void,
@@ -239,7 +239,7 @@ function decide<T>(
   if (protectedBy.some((p) => settings.protectedPaths.has(p))) {
     return change('skipped-protected', 'local');
   }
-  if (localPresent) return change(offer.duplicate ? 'skipped-duplicate' : 'kept-local', 'local');
+  if (localBlocks) return change(offer.duplicate ? 'skipped-duplicate' : 'kept-local', 'local');
   if (offer.valid === undefined) return change('skipped-invalid', 'incoming');
   write(offer.valid);
   return change(written, 'incoming');
@@ -302,7 +302,7 @@ function mergeNames(
       normalize: (n: HumanNameLike) => jsonOf(normalizeName(n)),
       copy: copyName,
       write: (added) => {
-        target.name = appended(target.name, added);
+        target.name = extend(target.name, added);
       },
     },
     settings,
@@ -333,7 +333,7 @@ function mergeTelecom(
       },
       copy: copyContactPoint,
       write: (added) => {
-        target.telecom = appended(target.telecom, added);
+        target.telecom = extend(target.telecom, added);
       },
     },
     settings,
@@ -357,7 +357,7 @@ function mergeAddresses(
       same: sameAddress,
       copy: copyAddress,
       write: (added) => {
-        target.address = appended(target.address, added);
+        target.address = extend(target.address, added);
       },
     },
     settings,
@@ -387,7 +387,7 @@ interface ListPath<T extends object, N> {
   /** The local value at this path, as stored: entries of this kind, or anything else. */
   local: unknown;
   incoming: readonly T[];
-  /** The entry after normalization; `undefined` when it is unusable. */
+  /** The entry after normalization (of its copy); `undefined` when it is unusable. */
   normalize: (entry: T) => N | undefined;
   /** When two normalized entries are the same. Default: `===` (a `Set` lookup). */
   same?: (a: N, b: N) => boolean;
@@ -412,10 +412,12 @@ function mergeList<T extends object, N>(
   const copies: T[] = [];
   for (const entry of spec.incoming) {
     if (chosen.length === MAX_ENTRIES) break;
-    const normalized = spec.normalize(entry);
-    if (normalized === undefined || chosen.some((c) => same(c, normalized))) continue;
+    // Copy first: it rejects over-long text before any normalization work, and the copy is what
+    // gets written, so it is what must be compared.
     const copy = spec.copy(entry);
-    if (copy === undefined) continue;
+    const normalized = copy === undefined ? undefined : spec.normalize(copy);
+    if (copy === undefined || normalized === undefined) continue;
+    if (chosen.some((c) => same(c, normalized))) continue;
     chosen.push(normalized);
     copies.push(copy);
   }
@@ -465,7 +467,7 @@ function membership<N>(
 }
 
 /** `current` (when it is an array) followed by `added`: a merge never drops what is there. */
-function appended(current: unknown, added: readonly unknown[]): unknown[] {
+function extend(current: unknown, added: readonly unknown[]): unknown[] {
   return [...(Array.isArray(current) ? current : []), ...added];
 }
 

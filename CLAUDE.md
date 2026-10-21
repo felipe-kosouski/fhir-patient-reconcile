@@ -103,6 +103,7 @@ These planning files are local-only (git-ignored, not in the public repo).
 - At most 10 new entries per path: the first 10 distinct valid incoming entries, minus those already local. Local work is linear (x10 for addresses).
 - Writes always append to the local array (never replace), so even a `[null]` local list is kept.
 - ADR-0002 (`docs/adr/0002-fail-closed-merge.md`) records the whole merge design.
+- Review: `mergeList` copies an entry first and normalizes the copy (over-long text is rejected before any normalization, and the compared value is the written one). Merge and match are linear in input size (~30 MB/s): a 100 MB record of 100k addresses takes ~3 s in `matchPatients`, because it normalizes every entry before dropping duplicates.
 
 ## Untrusted input: bounded work (session 7 review, owner decisions)
 - The incoming record is untrusted, so no input may cause super-linear work without a bound. Measure hostile inputs (long runs, huge arrays) when adding a normalizer or comparator; quadratic code has shipped twice (phone regex, address markers).
