@@ -68,7 +68,8 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 | npm pre-release `0.1.0-alpha.0` (tag `next`) | ✅ done |
 | `mergePatient`: fail-closed precondition, allowlist, `fill-empty-only`, protected paths, change report | ✅ done |
 | `mergePatient` array policies (`append-new` for phones, emails and addresses) and [ADR-0002](docs/adr/0002-fail-closed-merge.md) (fail-closed design) | ✅ done |
-| Property tests for merging (never overwrites, never removes, idempotent) | 🚧 next |
+| Property tests for merging (never overwrites, never removes, idempotent, refusal = unchanged copy); coverage ≥ 90% enforced for matching and merging (today ~99%) | ✅ done |
+| Final docs: examples, CONTRIBUTING, SECURITY | 🚧 next |
 | npm release `0.1.0` with provenance | ⏳ planned |
 
 ## What works today
@@ -252,6 +253,10 @@ How correctness is checked, not just asserted:
   (separators, parentheses, country codes) and never mutate input; `matchPatients` is symmetric,
   deterministic, never writes to its (deep-frozen) inputs, never throws on arbitrary JSON, and
   its explanations contain no patient text, no digits and only configured identifier systems.
+  `mergePatient` never overwrites or removes local data, never writes outside the allowlist or
+  to protected paths, reports exactly what it changed, and merging twice changes nothing more;
+  a refusal returns an unchanged copy. Random pairs almost never merge, so the merge properties
+  start both sides from one shared identity and check that most generated pairs do merge.
   These caught real bugs (a doubled generational suffix normalized differently on a second
   pass; valid FHIR JSON with `null` in a name array crashed), and each property is confirmed by
   breaking the code on purpose.

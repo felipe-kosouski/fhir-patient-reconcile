@@ -113,5 +113,6 @@ is planned for a later version.
 - The duplicate rules for `append-new` are deliberately strict about what is new. Two spellings
   of the same street without postal codes (`Rua das Flores 100` and `Rua Flores 100`) are both
   kept.
-- Enforced by `test/unit/merge/merge.test.ts`. Property tests for "never overwrites, never
-  removes, idempotent" follow in a later session.
+- Enforced by `test/unit/merge/merge.test.ts` and the properties in
+  `test/property/merge.property.test.ts` (never overwrites, never removes, idempotent, a refusal
+  is an unchanged copy).

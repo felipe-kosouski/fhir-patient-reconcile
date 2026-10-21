@@ -47,7 +47,7 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.loose.json",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "test:watch": "vitest",
     "test:package": "node test/package/smoke.mjs && node test/package/smoke.cjs",
     "lint": "biome check .",

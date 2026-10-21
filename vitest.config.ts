@@ -5,6 +5,11 @@ const config: ViteUserConfig = defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
+      // The plan's bar for the matching and merge code; `pnpm test` fails below it.
+      thresholds: {
+        'src/match/**': { statements: 90, branches: 90, functions: 90, lines: 90 },
+        'src/merge/**': { statements: 90, branches: 90, functions: 90, lines: 90 },
+      },
     },
     projects: [
       {

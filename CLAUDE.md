@@ -105,6 +105,12 @@ These planning files are local-only (git-ignored, not in the public repo).
 - ADR-0002 (`docs/adr/0002-fail-closed-merge.md`) records the whole merge design.
 - Review: `mergeList` copies an entry first and normalizes the copy (over-long text is rejected before any normalization, and the compared value is the written one). Merge and match are linear in input size (~30 MB/s): a 100 MB record of 100k addresses takes ~3 s in `matchPatients`, because it normalizes every entry before dropping duplicates.
 
+## Merge properties (session 13)
+- `test/property/merge.property.test.ts` uses `mergePair` / `mergeOptions` (`arbitraries.ts`): both sides start from one identity (name, birth date, CPF, phone); each field is shared, absent, another value or junk per side; local also gets elements outside the allowlist (`id`, `meta`, `extension`, `_birthDate`, `link`). `require` is always present and mostly `'possible'` (an optional key is omitted half the time, which defaulted to `match` and refused most pairs).
+- A guard test asserts > 500 of 1,000 sampled pairs merge and every change action occurs, so the properties cannot pass on refusals alone.
+- Properties: refusal = unchanged copy; local elements survive (lists keep local entries in front); only allowlisted keys change; fill-empty-only and protected paths leave their projection equal; no mutation (deep-frozen); `filled`/`appended` reported exactly where the projection changed; appended counts and fresh objects; report fields only, `value` only with includeValues; idempotent. Each confirmed by a mutant (11 mutants, all killed).
+- Coverage: `pnpm test` runs `vitest run --coverage`; thresholds 90% (statements, branches, functions, lines) for `src/match/**` and `src/merge/**` in `vitest.config.ts` (today ~99%).
+
 ## Untrusted input: bounded work (session 7 review, owner decisions)
 - The incoming record is untrusted, so no input may cause super-linear work without a bound. Measure hostile inputs (long runs, huge arrays) when adding a normalizer or comparator; quadratic code has shipped twice (phone regex, address markers).
 - Names and addresses: duplicates dropped, then at most `MAX_ENTRIES` = 10 per side compared. Jaro-Winkler on at most the first 10 tokens of a name part (set equality uses all) and only on tokens of at most 40 characters (longer: equality only). Worst case for a hostile record ~0.1 s; typical pair ~0.02 ms.

@@ -1,7 +1,13 @@
-// Shared fast-check generators for the matching properties. All values are synthetic.
+// Shared fast-check generators for the matching and merge properties. All values are synthetic.
 
 import fc from 'fast-check';
-import { type MatchOptions, type PatientLike, RNDS_CPF_SYSTEM } from '../../src/index.js';
+import {
+  type MatchOptions,
+  type MergeOptions,
+  type MergePath,
+  type PatientLike,
+  RNDS_CPF_SYSTEM,
+} from '../../src/index.js';
 
 // Small pools of synthetic values, so equal, near and different values all come up often.
 const given = fc.constantFrom(
@@ -154,3 +160,81 @@ export const untrusted: fc.Arbitrary<PatientLike> = fc
     { requiredKeys: [] },
   )
   .map((fields) => ({ resourceType: 'Patient', ...fields }) as unknown as PatientLike);
+
+// --- merge pairs ---
+// Random pairs rarely match, so a merge property over them passes without merging anything.
+// Both sides start from one shared identity (name, birth date, CPF, phone); each field then
+// stays shared, goes missing, takes another valid value or turns into junk, on each side. Most
+// pairs merge (with require: 'possible'), and the ones that do not exercise refusals.
+
+const sharedName = { given: ['João'], family: 'Souza' };
+const sharedPhone = { system: 'phone', value: '(41) 99876-5432' };
+const sharedCpf = { system: RNDS_CPF_SYSTEM, value: '111.444.777-35' };
+
+/** Shared (most often), absent, another valid value, or junk. */
+const varied = <T>(shared: T, other: fc.Arbitrary<unknown>) =>
+  fc.oneof(
+    { weight: 4, arbitrary: fc.constant(shared) },
+    { weight: 2, arbitrary: fc.constant(undefined) },
+    { weight: 2, arbitrary: other },
+    { weight: 1, arbitrary: junk },
+  );
+
+const contacts = fc.array(fc.oneof(contact, fc.constant(sharedPhone)), { maxLength: 4 });
+const side = fc
+  .record({
+    name: varied([sharedName], fc.array(humanName, { maxLength: 2 })),
+    birthDate: varied('1987-03-14', birthDate),
+    telecom: varied([sharedPhone], contacts),
+    address: varied(undefined, fc.array(address, { maxLength: 3 })),
+    gender: varied(undefined, fc.constantFrom('male', 'female', 'other', 'unknown')),
+  })
+  .map((fields) => {
+    const result: Record<string, unknown> = { resourceType: 'Patient', identifier: [sharedCpf] };
+    for (const [key, value] of Object.entries(fields)) if (value !== undefined) result[key] = value;
+    return result;
+  });
+
+/** Elements outside the merge allowlist, on the local side: a merge must never touch them. */
+const outsideAllowlist = fc.record(
+  {
+    id: fc.constant('local-1'),
+    meta: fc.constant({ versionId: '3', tag: [{ code: 'reviewed' }] }),
+    active: fc.boolean(),
+    extension: fc.constant([{ url: 'urn:example:local', valueString: 'x' }]),
+    _birthDate: fc.constant({ extension: [{ url: 'urn:example:data-absent-reason' }] }),
+    link: fc.constant([{ other: { reference: 'Patient/9' }, type: 'seealso' }]),
+  },
+  { requiredKeys: [] },
+);
+
+export const mergePair: fc.Arbitrary<{ local: PatientLike; incoming: PatientLike }> = fc
+  .record({ local: side, incoming: side, extra: outsideAllowlist })
+  .map(({ local, incoming, extra }) => ({
+    local: { ...local, ...extra } as unknown as PatientLike,
+    incoming: incoming as unknown as PatientLike,
+  }));
+
+const mergePaths: MergePath[] = [
+  'birthDate',
+  'gender',
+  'name',
+  'telecom',
+  'telecom.phone',
+  'telecom.email',
+  'address',
+];
+const arrayPolicy = fc.constantFrom('fill-empty-only', 'append-new' as const);
+
+// Mostly require: 'possible', or most pairs (possible, not match) would be refused.
+export const mergeOptions: fc.Arbitrary<MergeOptions> = fc.record(
+  {
+    require: fc.constantFrom('possible', 'possible', 'possible', 'match', undefined),
+    protectedPaths: fc.subarray(mergePaths),
+    arrays: fc.record({ telecom: arrayPolicy, address: arrayPolicy }, { requiredKeys: [] }),
+    source: fc.constant('hie:example'),
+    includeValues: fc.boolean(),
+    matchOptions: fc.constant({ defaultCountry: 'BR' as const }),
+  },
+  { requiredKeys: ['require'] },
+);
