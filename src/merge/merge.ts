@@ -211,8 +211,11 @@ interface Offer<T> {
   valid: T | undefined;
   /** Every valid incoming value is already in the local record (after normalization). */
   duplicate: boolean;
-  /** The incoming value as given, for `includeValues`. */
-  raw: unknown;
+  /**
+   * For `includeValues` when nothing is written: every valid incoming value (duplicates
+   * included), or the incoming value as given when none is valid.
+   */
+  offered: unknown;
 }
 
 /**
@@ -233,7 +236,7 @@ function decide<T>(
   const change = (action: Change['action'], origin: Change['origin']): Change => {
     const result: Change = { path, action, origin };
     if (action === written && settings.source !== undefined) result.source = settings.source;
-    if (settings.includeValues) result.value = offer.valid ?? offer.raw;
+    if (settings.includeValues) result.value = action === written ? offer.valid : offer.offered;
     return result;
   };
   if (protectedBy.some((p) => settings.protectedPaths.has(p))) {
@@ -258,7 +261,7 @@ function mergeBirthDate(
     duplicate:
       valid !== undefined &&
       normalizeIncoming(local.birthDate, normalizeBirthDate)?.value === valid,
-    raw: incoming.birthDate,
+    offered: valid ?? incoming.birthDate,
   };
   const localPresent = isSet(local.birthDate) || hasPrimitiveElement(local, '_birthDate');
   return decide('birthDate', ['birthDate'], localPresent, offer, settings, (value) => {
@@ -278,7 +281,7 @@ function mergeGender(
     present: isSet(value),
     valid,
     duplicate: valid !== undefined && local.gender === valid,
-    raw: value,
+    offered: valid ?? value,
   };
   const localPresent = isSet(local.gender) || hasPrimitiveElement(local, '_gender');
   return decide('gender', ['gender'], localPresent, offer, settings, (v) => {
@@ -408,29 +411,27 @@ function mergeList<T extends object, N>(
   settings: Settings,
 ): Change | undefined {
   const same = spec.same ?? ((a: N, b: N) => a === b);
-  const chosen: N[] = [];
-  const copies: T[] = [];
+  const valid: { copy: T; normalized: N }[] = [];
   for (const entry of spec.incoming) {
-    if (chosen.length === MAX_ENTRIES) break;
+    if (valid.length === MAX_ENTRIES) break;
     // Copy first: it rejects over-long text before any normalization work, and the copy is what
     // gets written, so it is what must be compared.
     const copy = spec.copy(entry);
     const normalized = copy === undefined ? undefined : spec.normalize(copy);
     if (copy === undefined || normalized === undefined) continue;
-    if (chosen.some((c) => same(c, normalized))) continue;
-    chosen.push(normalized);
-    copies.push(copy);
+    if (valid.some((v) => same(v.normalized, normalized))) continue;
+    valid.push({ copy, normalized });
   }
 
   const localEntries = Array.isArray(spec.local) ? objects<T>(spec.local) : [];
   const isLocal = membership(localEntries.map(spec.normalize), spec.same);
-  const fresh = copies.filter((_, k) => !isLocal(chosen[k] as N));
+  const fresh = valid.filter((v) => !isLocal(v.normalized)).map((v) => v.copy);
   const offer: Offer<T[]> = {
     present: spec.incoming.length > 0,
     valid: fresh.length > 0 ? fresh : undefined,
-    duplicate: copies.length > 0 && fresh.length === 0,
-    // Echoed only with includeValues; bounded like the copies.
-    raw: spec.incoming.slice(0, MAX_ENTRIES),
+    duplicate: valid.length > 0 && fresh.length === 0,
+    // Bounded like the copies.
+    offered: valid.length > 0 ? valid.map((v) => v.copy) : spec.incoming.slice(0, MAX_ENTRIES),
   };
 
   const localPresent = presentArray(spec.local);
@@ -448,7 +449,7 @@ function mergeList<T extends object, N>(
   );
   if (result?.action === 'appended') {
     result.appended = fresh.length;
-    result.duplicates = copies.length - fresh.length;
+    result.duplicates = valid.length - fresh.length;
   }
   return result;
 }

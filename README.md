@@ -118,8 +118,9 @@ matchPatients({ ...local, name: [{ family: 'Souza Filho', given: ['João'] }] },
 // [generational-suffix-conflict, birthdate-conflict]: decision 'no-match', grade 'certainly-not'
 ```
 
-Merging is fail-closed: it runs the match itself, writes only where the local record is empty,
-never touches protected or unlisted fields, and returns an unchanged copy when it refuses.
+Merging is fail-closed: it runs the match itself, writes only where the local record is empty
+(unless you opt in to appending new phones, emails or addresses), never touches protected or
+unlisted fields, and returns an unchanged copy when it refuses.
 
 ```ts
 import { mergePatient } from 'fhir-patient-reconcile';

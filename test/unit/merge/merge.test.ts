@@ -532,6 +532,31 @@ describe('mergePatient: append-new', () => {
     ]);
   });
 
+  it('with includeValues, a change that writes nothing shows every valid entry offered', () => {
+    const offered = [phone(' (41) 99876-5432 '), phone('(41) 98765-4321')];
+    const value = (options: MergeOptions) =>
+      change(
+        merge({}, { telecom: offered }, { ...options, includeValues: true }).changes,
+        'telecom[system=phone]',
+      );
+    // Normalized copies (trimmed), the duplicate included.
+    const copies = [phone('(41) 99876-5432'), phone('(41) 98765-4321')];
+    expect(value({ require: 'possible' })).toMatchObject({ action: 'kept-local', value: copies });
+    expect(value({ ...appendNew, protectedPaths: ['telecom'] })).toMatchObject({
+      action: 'skipped-protected',
+      value: copies,
+    });
+    const duplicate = change(
+      merge({}, { telecom: [phone('41 99876 5432')] }, { ...appendNew, includeValues: true })
+        .changes,
+      'telecom[system=phone]',
+    );
+    expect(duplicate).toMatchObject({
+      action: 'skipped-duplicate',
+      value: [phone('41 99876 5432')],
+    });
+  });
+
   it('merging the result again changes nothing', () => {
     const i = patient({
       ...base,

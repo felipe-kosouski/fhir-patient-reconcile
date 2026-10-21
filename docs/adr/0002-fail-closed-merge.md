@@ -67,8 +67,9 @@ are not already local are added:
 - phones are the same when they normalize to the same number (`+55 41 99876-5432` and
   `(41) 99876-5432`); emails when they normalize to the same address;
 - addresses are the same when they have the same postal code and street line. Without a postal
-  code on one side: the same line and no city that differs. A near copy that only adds a city
-  or spells `R.` for `Rua` is not new information.
+  code on one side: the same line (or, with no line on either, the same city) and no city that
+  differs. Addresses in different countries are never the same. A near copy that only adds a
+  city or spells `R.` for `Rua` is not new information.
 
 Local entries are never changed, reordered or removed. A local `telecom` or `address` that is
 not an array is kept as it is. Names are never appended: a second name is not more
@@ -77,8 +78,9 @@ information about the person, and choosing between names is a human decision.
 **10. A report without patient values.** Each path the incoming record offers something for
 gets one change: `filled`, `appended` (with how many entries were added and how many were
 already local), `kept-local`, `skipped-duplicate`, `skipped-protected` or `skipped-invalid`,
-with the `source` label on changes taken from the incoming record. The incoming value appears
-only with `includeValues: true`, like explanations in `matchPatients`.
+with the `source` label on changes taken from the incoming record. Values appear only with
+`includeValues: true`, like explanations in `matchPatients`: what was written, or else what
+was offered.
 
 **11. No mark in the resource.** v0.1 adds nothing to the merged patient to say where a value
 came from; provenance lives in the change report only. Generating a FHIR `Provenance` resource

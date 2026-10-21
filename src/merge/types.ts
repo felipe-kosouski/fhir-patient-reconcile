@@ -70,7 +70,7 @@ export interface Change {
   /** `birthDate`, `gender`, `name`, `address`, `telecom[system=phone]`, `telecom[system=email]`. */
   path: string;
   action: ChangeAction;
-  /** Whose data the result holds for this path. */
+  /** Whose data the result holds for this path (`appended`: the added entries are incoming). */
   origin: 'local' | 'incoming';
   /** `MergeOptions.source`, on changes taken from the incoming record. */
   source?: string;
@@ -78,7 +78,10 @@ export interface Change {
   appended?: number;
   /** On `appended`: how many valid incoming entries were already in the local record. */
   duplicates?: number;
-  /** The incoming value the change is about, only with `includeValues`. */
+  /**
+   * Only with `includeValues`: what was written (`filled`, `appended`), otherwise every valid
+   * incoming value, or the incoming value as given when none is valid (at most 10 entries).
+   */
   value?: unknown;
 }
 
