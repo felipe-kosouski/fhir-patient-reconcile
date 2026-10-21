@@ -125,6 +125,7 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Changesets 3.0.3 (`.changeset/config.json` written by hand: `init` is interactive in v3), default changelog format, `access: public`. Staged publishing does not work with Changesets. Users add `pnpm changeset` for visible changes (CONTRIBUTING).
 - Repo setting enabled (owner OK): Actions may create pull requests; default workflow token stays read-only.
 - The README that npm shows is the one packed at publish: release-ready README changes go on the version PR branch, so `main` never claims a release before it happens.
+- **0.1.0 published 2026-10-21** by release.yml (run 39641588735, commit 79b7de7, tag and GitHub release `v0.1.0`). Verified: SLSA provenance names this repo, `release.yml` and the commit; `npm audit signatures` passes; a fresh `npm i` runs all examples. Note: the npm registry took about a minute to show the version after the job reported success.
 - After 0.1.0: move `next` to 0.1.0 (`npm dist-tag add fhir-patient-reconcile@0.1.0 next`, owner, by hand).
 
 ## Untrusted input: bounded work (session 7 review, owner decisions)
