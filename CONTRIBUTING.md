@@ -85,6 +85,23 @@ and `@medplum/fhirtypes`, with `exactOptionalPropertyTypes` on and off: optional
 - Design decisions go in [`docs/adr/`](docs/adr/) as a new numbered record.
 - Code, comments and docs are in English. Comments explain why, not what.
 
+## Changesets and releases
+
+A change users can see (a fix, a feature, a changed default) needs a changeset, which becomes
+its entry in [CHANGELOG.md](CHANGELOG.md):
+
+```bash
+pnpm changeset   # pick patch, minor or major, and describe the change for users
+```
+
+Commit the generated file in `.changeset/` with your change. Internal changes (tests, CI,
+refactoring) need none. Until 1.0, breaking changes are `minor` and everything else is `patch`.
+
+Releases are automated by [`.github/workflows/release.yml`](.github/workflows/release.yml): on
+`main`, pending changesets open a "version packages" pull request; merging it runs every check
+and, after the maintainer approves the `npm` environment, publishes to npm with provenance
+through npm Trusted Publishing (no npm token exists).
+
 ## Commits
 
 Small commits with a conventional prefix (`feat:`, `fix:`, `test:`, `docs:`, `refactor:`,

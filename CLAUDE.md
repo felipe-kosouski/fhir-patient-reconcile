@@ -119,6 +119,14 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Security reports: GitHub private vulnerability reporting (enabled 2026-10-21, owner decision); SECURITY.md lists what counts (PHI leak, fail-closed bypass, super-linear work or throw on valid FHIR JSON, prototype pollution) and what does not (wrong matching decisions are issues).
 - CONTRIBUTING.md holds the ground rules for outside contributors (synthetic data, tests that can fail, hard cases first, untrusted input, fail-closed, type compatibility).
 
+## Release (session 15, owner decisions)
+- `.github/workflows/release.yml` follows Changesets' trusted-publishing workflow (select-mode -> version | pack -> publish), adapted to pnpm, with actions pinned by SHA (`changesets/action` v2.1.2 = `ae32849d…`). `permissions: {}` at the top; only `publish` has `id-token: write`. `pack` runs the full `pnpm check`, because the version PR is opened by GitHub Actions and CI does not run on it.
+- `publish` uses the GitHub environment `npm` (required reviewer: the owner; deployments from `main` only); the npm trusted publisher must name user `felipe-kosouski`, repo `fhir-patient-reconcile`, workflow `release.yml`, environment `npm`. A new trusted-publisher configuration expires if it has not published within 2 days.
+- Changesets 3.0.3 (`.changeset/config.json` written by hand: `init` is interactive in v3), default changelog format, `access: public`. Staged publishing does not work with Changesets. Users add `pnpm changeset` for visible changes (CONTRIBUTING).
+- Repo setting enabled (owner OK): Actions may create pull requests; default workflow token stays read-only.
+- The README that npm shows is the one packed at publish: release-ready README changes go on the version PR branch, so `main` never claims a release before it happens.
+- After 0.1.0: move `next` to 0.1.0 (`npm dist-tag add fhir-patient-reconcile@0.1.0 next`, owner, by hand).
+
 ## Untrusted input: bounded work (session 7 review, owner decisions)
 - The incoming record is untrusted, so no input may cause super-linear work without a bound. Measure hostile inputs (long runs, huge arrays) when adding a normalizer or comparator; quadratic code has shipped twice (phone regex, address markers).
 - Names and addresses: duplicates dropped, then at most `MAX_ENTRIES` = 10 per side compared. Jaro-Winkler on at most the first 10 tokens of a name part (set equality uses all) and only on tokens of at most 40 characters (longer: equality only). Worst case for a hostile record ~0.1 s; typical pair ~0.02 ms.

@@ -54,12 +54,14 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "check:package": "publint --strict && attw --pack .",
+    "changeset": "changeset",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:package && pnpm check:package",
     "prepublishOnly": "pnpm check"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
     "@biomejs/biome": "2.5.15",
+    "@changesets/cli": "3.0.3",
     "@medplum/fhirtypes": "5.2.6",
     "@types/fhir": "0.0.44",
     "@vitest/coverage-v8": "5.0.5",
