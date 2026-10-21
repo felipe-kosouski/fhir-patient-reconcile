@@ -12,13 +12,14 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Code, identifiers, comments, README, docs and commit messages in **English**. Chat with the owner may be in Portuguese.
 - **No employer code, data, names or internal details.** Everything is written from scratch. All test data is synthetic: invented names, `example.com` emails, fictional phone ranges, algorithmically generated CPFs.
   - US phones: NANP fiction range `555-0100`–`555-0199`. Brazil has no official fictional range, so use obviously patterned numbers (e.g. `(41) 99876-5432`).
+  - UK phones (examples only): Ofcom's drama range `020 7946 0000`–`0999`.
 - Work in small, verifiable steps that follow the schedule in the plan. Each session ends with a check that passes (a command or a file).
 - Ask the owner before any decision the plan doesn't cover.
 
 ## Workflow
 - `pnpm check` (lint, typecheck in both modes, tests, build, ESM/CJS smoke tests, publint, attw) must pass before every commit.
 - One commit per session on `main`. Commit locally, then **ask the owner before pushing**; after a push, watch CI until it is green.
-- The public repo is shown to recruiters. Keep the README's **Status** table and "What works today" examples in sync with each session, and run every README example against `dist/` before committing it. Never describe planned features as done.
+- The public repo is shown to recruiters. Keep the README's **Status** table and examples in sync with each session. Every README example has a twin in `examples/` that asserts the same results (`pnpm test:examples`, part of `test:package`, runs in CI against `dist/`): change both together. Never describe planned features as done.
 - Design decisions go in `docs/adr/` (public, English).
 
 ## Approved decisions
@@ -111,6 +112,12 @@ These planning files are local-only (git-ignored, not in the public repo).
 - Guard test (1,000 samples, fixed seed): > 500 merge, every action occurs, every path is `filled` > 20 times and each list path `appended` > 20 times. Before tuning, appends were 1–4 per 1,000 and the append mutant was caught by luck. Properties run 300 times each.
 - Properties: refusal = unchanged copy; local elements survive (lists keep local entries in front); only allowlisted keys change; fill-empty-only and protected paths leave their projection equal; no mutation (deep-frozen); `filled`/`appended` reported exactly where the projection changed; appended counts and fresh objects; report fields only, `value` only with includeValues; idempotent. 14 mutants, all killed.
 - Coverage: `pnpm test` runs `vitest run --coverage`; thresholds 90% (statements, branches, functions, lines) for `src/match/**` and `src/merge/**` in `vitest.config.ts` (today ~99%).
+
+## Docs (session 14, owner decisions)
+- README order: problem, design goals, install, quick start, how matching works, how merging works, privacy, configuration, building blocks, supported data, known limitations, status, roadmap, engineering notes, contributing and security, related work. Facts in it were checked against the code (veto exception for an equal identifier, suffix list, option validation).
+- `examples/`: `match.mjs`, `merge.mjs`, `building-blocks.mjs`, `options.cjs` (CommonJS + configuration with a toy UK `normalizePhone`); each asserts what the README shows. Imported by package name (self-reference), like the smoke tests.
+- Security reports: GitHub private vulnerability reporting (enabled 2026-10-21, owner decision); SECURITY.md lists what counts (PHI leak, fail-closed bypass, super-linear work or throw on valid FHIR JSON, prototype pollution) and what does not (wrong matching decisions are issues).
+- CONTRIBUTING.md holds the ground rules for outside contributors (synthetic data, tests that can fail, hard cases first, untrusted input, fail-closed, type compatibility).
 
 ## Untrusted input: bounded work (session 7 review, owner decisions)
 - The incoming record is untrusted, so no input may cause super-linear work without a bound. Measure hostile inputs (long runs, huge arrays) when adding a normalizer or comparator; quadratic code has shipped twice (phone regex, address markers).

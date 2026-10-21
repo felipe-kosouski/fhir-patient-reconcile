@@ -50,33 +50,17 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
   `@medplum/fhirtypes` without casts, and `mergePatient` returns your own type back.
 - **Zero runtime dependencies.** Dual ESM + CommonJS with type declarations.
 
-## Status
-
-| Area | State |
-|---|---|
-| Package scaffold: TypeScript 7 strict, dual ESM/CJS build, CI on Node 22/24/26 | ✅ done |
-| FHIR input types with compatibility tests against `@types/fhir` and Medplum | ✅ done |
-| `normalizeText`, `normalizeName` | ✅ done |
-| `normalizePhone` (Brazil + NANP, ninth digit), `normalizeEmail`, placeholder values | ✅ done |
-| `normalizeBirthDate` (partial dates), `normalizeAddress` (CEP/ZIP + street line), `normalizeCpf` | ✅ done |
-| Hard-case table for matching: 45 cases with expected decisions, written before any weights | ✅ done |
-| `jaroWinkler`, `damerauLevenshtein` (checked against published reference values) | ✅ done |
-| Per-field comparators (outcome, points and a reason without patient values, per field) | ✅ done |
-| `matchPatients` (weights, thresholds, vetoes, minimum evidence, FHIR `match-grade`) | ✅ done |
-| Calibration against the hard-case table: 42 of 45 pass, 3 [known limitations](#known-limitations) ([report](docs/calibration.md)) | ✅ done |
-| Property tests for matching (symmetry, determinism, no mutation, no patient values in explanations) and an [explanation snapshot](test/unit/match/__snapshots__/explanation.json) | ✅ done |
-| npm pre-release `0.1.0-alpha.0` (tag `next`) | ✅ done |
-| `mergePatient`: fail-closed precondition, allowlist, `fill-empty-only`, protected paths, change report | ✅ done |
-| `mergePatient` array policies (`append-new` for phones, emails and addresses) and [ADR-0002](docs/adr/0002-fail-closed-merge.md) (fail-closed design) | ✅ done |
-| Property tests for merging (never overwrites, never removes, idempotent, refusal = unchanged copy); coverage ≥ 90% enforced for matching and merging | ✅ done |
-| Final docs: examples, CONTRIBUTING, SECURITY | 🚧 next |
-| npm release `0.1.0` with provenance | ⏳ planned |
-
-## What works today
+## Install
 
 ```bash
-npm install fhir-patient-reconcile@next
+npm install fhir-patient-reconcile@next   # pre-release; 0.1.0 is not out yet
 ```
+
+Node.js 22 or later. ESM (`import`) and CommonJS (`require`) both work, with type declarations.
+
+## Quick start
+
+Is the incoming record the same person, and why?
 
 ```ts
 import { matchPatients } from 'fhir-patient-reconcile';
@@ -119,9 +103,7 @@ matchPatients({ ...local, name: [{ family: 'Souza Filho', given: ['João'] }] },
 // [generational-suffix-conflict, birthdate-conflict]: decision 'no-match', grade 'certainly-not'
 ```
 
-Merging is fail-closed: it runs the match itself, writes only where the local record is empty
-(unless you opt in to appending new phones, emails or addresses), never touches protected or
-unlisted fields, and returns an unchanged copy when it refuses.
+Then merge what is safe to take:
 
 ```ts
 import { mergePatient } from 'fhir-patient-reconcile';
@@ -157,9 +139,121 @@ appended.patient.telecom?.map((c) => c.value);
 // ['(41) 99876-5432', '(41) 98765-4321', 'joao.souza@example.com']
 ```
 
-Why each rule is there: [ADR-0002](docs/adr/0002-fail-closed-merge.md).
+Runnable versions of every example in this README, with assertions, are in
+[`examples/`](examples/); CI runs them against the built package.
 
-Building blocks, also exported:
+## How matching works
+
+`matchPatients(local, incoming, options?)` normalizes each field on both sides and compares it.
+Every comparison has one of four outcomes:
+
+| Outcome | Meaning | Points |
+|---|---|---|
+| `exact` | Equal after normalization | the field's full weight |
+| `fuzzy` | Close, for example: names with Jaro-Winkler ≥ 0.92, birth dates with day and month swapped or one day apart, the same postal code with another street line | a partial weight |
+| `missing` | One side has no usable value; placeholders (`000.000.000-00`, `1900-01-01`, "RN de Maria") count as missing | 0, always |
+| `conflict` | Both sides have values and they disagree | a negative weight |
+
+Names use the best pair across all `name` entries; given, middle and family names are never
+mixed between entries. Identifiers score only for trusted systems (by default the Brazilian CPF
+as used by RNDS). Gender never scores.
+
+The points are summed, and the decision follows:
+
+- **`match`**: at least 14 points (`thresholds.match`), no veto, and enough independent
+  evidence: first and family name agree (with no middle-name conflict), the birth date agrees,
+  and so does one of identifier, phone, email or address.
+- **`possible`**: at least 8 points (`thresholds.possible`) and one agreeing field besides the
+  name. Send these to a person. A shared trusted identifier makes a pair at least `possible`.
+- **`no-match`**: everything else.
+
+**Vetoes** force `no-match` (or `possible`, when an equal trusted identifier lifts the pair):
+different values for the same trusted identifier system, different generations (Filho vs Neto,
+Jr. vs Sr.; Júnior and Filho are the same generation), and birth dates in different years. `matchGrade` gives the same answer in FHIR `$match` vocabulary:
+`certain`, `probable` (a `possible` with full evidence and no veto, past the midpoint between
+the thresholds), `possible`, `certainly-not` (vetoed), or `null`.
+
+`score` (0 to 1) is the points divided by the most a pair could score. **It is a ranking aid,
+not a probability.** The weights have the shape of a Fellegi-Sunter model (agreement > 0,
+missing = 0, disagreement < 0), but they were set by hand against a
+[table of hard cases](test/cases/match-cases.ts), not estimated from a real population.
+
+<details>
+<summary>Default weights (<code>DEFAULT_WEIGHTS</code>)</summary>
+
+| Field | exact | fuzzy | conflict |
+|---|---|---|---|
+| identifier (same trusted system) | +10 | — | −10 and veto |
+| family name | +4 | +2 | −3 |
+| first given name | +4 | +2 | −3 |
+| middle names | +1 | +0.5 | 0 (but blocks `match`) |
+| birth date | +5 | +2 | −6 (veto if the years differ) |
+| phone | +4 | — | −1 |
+| email | +4 | — | −1 |
+| address | +3 | +1 | −1 |
+| gender | 0 | — | 0 |
+
+</details>
+
+The [calibration report](docs/calibration.md) shows every hard case's points and decision, and
+how far each weight and threshold can move before a case breaks.
+
+## How merging works
+
+`mergePatient(local, incoming, options?)` is **fail-closed**: when in doubt, nothing changes.
+
+- It runs `matchPatients` itself (with `matchOptions`) and merges only on `match`. `possible`
+  needs an explicit `require: 'possible'`; a veto always refuses. A `match` result you pass in
+  is checked against that run, so a stale one cannot authorize a merge.
+- A refused merge returns an unchanged copy of the local patient and the reason.
+- **Fill empty fields only.** A value is written only where the local record has nothing. A
+  local placeholder, a partial date or a data-absent-reason extension counts as data and is
+  kept.
+- Only `birthDate`, `gender`, `name`, phones and emails in `telecom`, and `address` can change.
+  `id`, `meta`, `identifier`, `link`, extensions and everything else are never touched.
+- Only valid incoming entries are copied, as fresh objects without extensions, at most 10 per
+  path. Entries that are the same after normalization are copied once.
+- `protectedPaths` (for example, data a person confirmed) are never written.
+- `arrays: { telecom: 'append-new', address: 'append-new' }` also adds new phones, emails or
+  addresses when local already has some. Local entries are never changed or removed.
+- `changes` lists one entry per path the incoming record offered something for: `filled`,
+  `appended`, `kept-local`, `skipped-duplicate`, `skipped-protected` or `skipped-invalid`, with
+  the `source` label on what was taken.
+
+The reasons behind each rule, and the alternatives that were rejected, are in
+[ADR-0002](docs/adr/0002-fail-closed-merge.md).
+
+## Privacy by default
+
+Explanations and change reports contain **no patient values** unless you pass
+`includeValues: true` (to `matchPatients`, or to `mergePatient` for its report). These objects
+tend to end up in logs, and logs are a common place for PHI to leak. Without it, reasons are
+fixed sentences such as "birth dates are equal"; a test checks that they never contain patient
+text or digits.
+
+## Configuration
+
+```ts
+import { matchPatients, RNDS_CPF_SYSTEM } from 'fhir-patient-reconcile';
+
+matchPatients(local, incoming, {
+  defaultCountry: 'BR',                        // for phone numbers without a country code
+  identifierSystems: { trusted: [RNDS_CPF_SYSTEM, 'urn:example:clinic-a:mrn'] },
+  normalizePhone: (value) => toE164(value),    // your parser for other countries (or undefined)
+  weights: { address: { exact: 4 } },          // override any weight
+  thresholds: { match: 16 },                   // or the decision thresholds
+  nameSimilarity: { fuzzyMin: 0.94 },          // Jaro-Winkler cut-off for fuzzy names
+  includeValues: false,                        // default
+});
+```
+
+Options are validated: a misspelled option, field or outcome name, a non-finite weight or
+`possible` above `match` throws instead of being ignored. See
+[`examples/options.cjs`](examples/options.cjs) for a run with a custom phone normalizer.
+
+## Building blocks
+
+The normalizers and similarity functions behind `matchPatients` are exported too:
 
 ```ts
 import {
@@ -219,6 +313,20 @@ damerauLevenshtein('CA', 'ABC');
 // 2: CA -> AC -> ABC (unrestricted; "optimal string alignment" would give 3)
 ```
 
+## Supported data
+
+- FHIR R4 `Patient`, structurally compatible with `@types/fhir` (R4 and R5) and
+  `@medplum/fhirtypes`, with no dependency on either ([ADR-0001](docs/adr/0001-own-fhir-types.md)).
+- **Names:** accents and case folded; Portuguese particles (`da`, `de`, `do`, `das`, `dos`,
+  `e`) between names; generational suffixes (`Filho`, `Neto`, `Júnior`, `Jr.`, `Sr.`, `II`);
+  titles (`Dr.`, `Sra.`); several family names; `HumanName.text` when there are no parts.
+- **Phones:** Brazil (with and without the ninth mobile digit) and NANP, with or without a
+  country code; service numbers rejected. Other countries through `normalizePhone`.
+- **Emails** (no provider-specific rules), **birth dates** (`YYYY`, `YYYY-MM`, `YYYY-MM-DD`),
+  **addresses** (CEP and ZIP, street abbreviations for Brazil and the US) and **CPF** check
+  digits.
+- Untrusted JSON: values of the wrong type are treated as missing, never thrown on.
+
 ## Known limitations
 
 - **Spelling variants of names.** Names are compared with Jaro-Winkler (cut-off 0.92), so
@@ -228,10 +336,44 @@ damerauLevenshtein('CA', 'ABC');
   estimated from real data, and `score` is not a probability.
 - **Brazil and the US only** for phones and addresses (other phone formats through
   `normalizePhone`); name rules are tuned for Portuguese and English names.
+- **1:1 only.** No candidate search, blocking or clustering: use a Master Patient Index or a
+  `Patient/$match` server for 1:N.
+- **Demographics only.** Clinical data is neither compared nor merged.
+- **No nicknames** (Bob and Robert, Zé and José are different names).
 - **Bounded work.** At most 10 distinct names and 10 addresses per record are compared, and a
   merge copies at most 10 entries per path; text over 1,000 characters is not copied.
 
 See the [calibration report](docs/calibration.md) for every case.
+
+## Status
+
+| Area | State |
+|---|---|
+| Package scaffold: TypeScript 7 strict, dual ESM/CJS build, CI on Node 22/24/26 | ✅ done |
+| FHIR input types with compatibility tests against `@types/fhir` and Medplum | ✅ done |
+| `normalizeText`, `normalizeName` | ✅ done |
+| `normalizePhone` (Brazil + NANP, ninth digit), `normalizeEmail`, placeholder values | ✅ done |
+| `normalizeBirthDate` (partial dates), `normalizeAddress` (CEP/ZIP + street line), `normalizeCpf` | ✅ done |
+| Hard-case table for matching: 45 cases with expected decisions, written before any weights | ✅ done |
+| `jaroWinkler`, `damerauLevenshtein` (checked against published reference values) | ✅ done |
+| Per-field comparators (outcome, points and a reason without patient values, per field) | ✅ done |
+| `matchPatients` (weights, thresholds, vetoes, minimum evidence, FHIR `match-grade`) | ✅ done |
+| Calibration against the hard-case table: 42 of 45 pass, 3 [known limitations](#known-limitations) ([report](docs/calibration.md)) | ✅ done |
+| Property tests for matching (symmetry, determinism, no mutation, no patient values in explanations) and an [explanation snapshot](test/unit/match/__snapshots__/explanation.json) | ✅ done |
+| npm pre-release `0.1.0-alpha.0` (tag `next`) | ✅ done |
+| `mergePatient`: fail-closed precondition, allowlist, `fill-empty-only`, protected paths, change report | ✅ done |
+| `mergePatient` array policies (`append-new` for phones, emails and addresses) and [ADR-0002](docs/adr/0002-fail-closed-merge.md) (fail-closed design) | ✅ done |
+| Property tests for merging (never overwrites, never removes, idempotent, refusal = unchanged copy); coverage ≥ 90% enforced for matching and merging | ✅ done |
+| Final docs: README, runnable [examples](examples/) checked in CI, [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) | ✅ done |
+| npm release `0.1.0` with provenance | 🚧 next |
+
+## Roadmap
+
+- **0.1.0**: the first stable release, published from CI with npm provenance.
+- **0.2**: `toMatchBundleEntry()` for `$match` responses, a FHIR `Provenance` resource built from
+  a merge report, pluggable nickname tables, mutation testing.
+- **0.3**: an optional Fellegi-Sunter mode with your own m/u probabilities; phonetic matching,
+  if one suited to Portuguese names holds up.
 
 ## Engineering notes
 
@@ -280,14 +422,18 @@ How correctness is checked, not just asserted:
 - **Synthetic data only.** Invented names, `example.com` emails, fictional phone ranges and
   algorithmically generated CPFs. No real patient data anywhere.
 
-## Development
+## Contributing and security
 
 Requires Node.js 22 or later and pnpm (the version is pinned in `package.json`).
 
 ```bash
 pnpm install
-pnpm check   # lint, typecheck (both modes), tests, build, ESM/CJS smoke tests, publint, attw
+pnpm check   # lint, typecheck (both modes), tests with coverage, build, package and example checks
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the ground rules (synthetic data only, tests that
+can fail, hard cases before weights). Please report vulnerabilities privately, as described in
+[SECURITY.md](SECURITY.md), not in a public issue.
 
 ## Related work
 

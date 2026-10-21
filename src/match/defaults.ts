@@ -1,8 +1,8 @@
 import type { FieldWeights, MatchField, MatchThresholds } from './types.js';
 
 /**
- * Starting points per field and outcome, from the v0.1 plan. They are a heuristic, not a
- * calibrated model, and will be tuned against the hard-case table.
+ * Points per field and outcome, from the v0.1 plan. They are a heuristic, not a calibrated
+ * model; docs/calibration.md checks them against the hard-case table.
  *
  * - Identifiers score only from trusted systems; a conflict there also vetoes.
  * - Phones and emails are shared by families and change, so a conflict costs little.
