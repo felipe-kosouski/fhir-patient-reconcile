@@ -88,14 +88,15 @@ and `@medplum/fhirtypes`, with `exactOptionalPropertyTypes` on and off: optional
 ## Changesets and releases
 
 A change users can see (a fix, a feature, a changed default) needs a changeset, which becomes
-its entry in [CHANGELOG.md](CHANGELOG.md):
+its entry in `CHANGELOG.md`:
 
 ```bash
 pnpm changeset   # pick patch, minor or major, and describe the change for users
 ```
 
 Commit the generated file in `.changeset/` with your change. Internal changes (tests, CI,
-refactoring) need none. Until 1.0, breaking changes are `minor` and everything else is `patch`.
+refactoring) need none. Versions follow semver; before 1.0, a breaking change bumps the minor
+version.
 
 Releases are automated by [`.github/workflows/release.yml`](.github/workflows/release.yml): on
 `main`, pending changesets open a "version packages" pull request; merging it runs every check
