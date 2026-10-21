@@ -19,8 +19,7 @@ you if you wish.
 
 ## Supported versions
 
-Until 1.0, only the latest published release (including pre-releases on the `next` tag)
-receives fixes.
+Until 1.0, only the latest published release receives fixes.
 
 ## What counts as a vulnerability
 

@@ -5,13 +5,11 @@
 [![CI](https://github.com/felipe-kosouski/fhir-patient-reconcile/actions/workflows/ci.yml/badge.svg)](https://github.com/felipe-kosouski/fhir-patient-reconcile/actions/workflows/ci.yml)
 ![zero dependencies](https://img.shields.io/badge/runtime_dependencies-0-brightgreen)
 ![license](https://img.shields.io/badge/license-Apache--2.0-blue)
-[![npm next](https://img.shields.io/npm/v/fhir-patient-reconcile/next)](https://www.npmjs.com/package/fhir-patient-reconcile)
+[![npm](https://img.shields.io/npm/v/fhir-patient-reconcile)](https://www.npmjs.com/package/fhir-patient-reconcile)
 
 > [!NOTE]
-> **Pre-release.** `0.1.0-alpha.0` is on npm under the `next` tag, with the normalizers and
-> `matchPatients`. `mergePatient` and everything else below is on `main` and comes with the next
-> release on npm. The API may still change before `0.1.0`. See [Status](#status) for exactly
-> what works today.
+> **Version 0.x.** The API may still change in a minor release before 1.0. Every change is
+> listed in the [changelog](CHANGELOG.md).
 
 ## The problem
 
@@ -54,7 +52,7 @@ operation in servers such as Medplum solve the 1:N search problem inside a serve
 ## Install
 
 ```bash
-npm install fhir-patient-reconcile@next   # pre-release; 0.1.0 is not out yet
+npm install fhir-patient-reconcile
 ```
 
 Node.js 22 or later. ESM (`import`) and CommonJS (`require`) both work, with type declarations.
@@ -368,11 +366,10 @@ See the [calibration report](docs/calibration.md) for every case.
 | `mergePatient` array policies (`append-new` for phones, emails and addresses) and [ADR-0002](docs/adr/0002-fail-closed-merge.md) (fail-closed design) | ✅ done |
 | Property tests for merging (never overwrites, never removes, idempotent, refusal = unchanged copy); coverage ≥ 90% enforced for matching and merging | ✅ done |
 | Final docs: README, runnable [examples](examples/) checked in CI, [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) | ✅ done |
-| npm release `0.1.0` with provenance | 🚧 next |
+| npm release `0.1.0` from CI (Changesets, npm Trusted Publishing, provenance) | ✅ done |
 
 ## Roadmap
 
-- **0.1.0**: the first stable release, published from CI with npm provenance.
 - **0.2**: `toMatchBundleEntry()` for `$match` responses, a FHIR `Provenance` resource built from
   a merge report, pluggable nickname tables, mutation testing.
 - **0.3**: an optional Fellegi-Sunter mode with your own m/u probabilities; phonetic matching,
